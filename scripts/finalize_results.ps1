@@ -128,6 +128,7 @@ if (Test-ActiveStage "03_enrichment") {
 
 # 04 Regulation
 if (Test-ActiveStage "04_regulation") {
+    Copy-ArtifactGroup "functional_enrichment/tf_analysis/boxplots" "04_Regulation/boxplots"
     Copy-ArtifactGroup "functional_enrichment/tf_analysis/decoupler_inference" "04_Regulation/TF_Activity"
     Copy-ArtifactGroup "functional_enrichment/tf_analysis/ENCODE_2015" "04_Regulation/TF_Target_GSEA/ENCODE"
     Copy-ArtifactGroup "functional_enrichment/tf_analysis/ChEA_Consensus" "04_Regulation/TF_Target_GSEA/ChEA"
@@ -198,6 +199,8 @@ Write-ReadmeIfExists "03_Enrichment" @(
 )
 Write-ReadmeIfExists "04_Regulation" @(
     "04_Regulation", "", "TF-target GSEA、CollecTRI TF 活性、GSVA 相关性和 PROGENy。",
+    "boxplots 中的 Top20 TF 表达图：优先展示 GSEA 显著且 TF 活性排名靠前的 TF；不足 20 个时用 TF 活性 Top 排名补齐。",
+    "基因名颜色：绿色=TF 自身表达方向与预测活性一致；黄色=表达变化弱；红色=方向相反。",
     "这些属于探索性调控推断，不能单独建立机制结论。"
 )
 Write-ReadmeIfExists "05_Network" @(

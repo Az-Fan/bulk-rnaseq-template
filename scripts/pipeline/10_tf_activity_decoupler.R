@@ -30,6 +30,9 @@ dir.create(functional_enrichment_dir, showWarnings = FALSE)
 tf_analysis_dir <- file.path(functional_enrichment_dir, "tf_analysis")
 dir.create(tf_analysis_dir, showWarnings = FALSE)
 
+tf_boxplot_dir <- file.path(tf_analysis_dir, "boxplots")
+dir.create(tf_boxplot_dir, recursive = TRUE, showWarnings = FALSE)
+
 # decoupleR 专用文件夹
 decoupler_out_dir <- file.path(tf_analysis_dir, "decoupler_inference")
 dir.create(decoupler_out_dir, showWarnings = FALSE)
@@ -253,6 +256,141 @@ gsea_res_df <- gsea_res@result %>% select(ID, gsea_nes = NES, gsea_pval = p.adju
 merged_res <- inner_join(ulm_res, gsea_res_df, by = "ID")
 merged_res$Type <- "Not Sig"
 merged_res$Type[merged_res$ulm_pval < 0.05 & merged_res$gsea_pval < 0.05 & sign(merged_res$ulm_score) == sign(merged_res$gsea_nes)] <- "Consistent"
+
+# 5.3a Top TF expression overview
+# Purpose: visualize the expression of the top TFs supported by TF-target GSEA
+# and decoupleR TF activity inference. X-axis label colors summarize whether
+# the TF's own expression direction agrees with predicted activity:
+# green = consistent, yellow = weak expression change, red = opposite.
+make_top_tf_expression_plot <- function(
+    contrast_df, merged_res, expr_mat_symbol, metadata,
+    tf_boxplot_dir, n_top = 20, weak_delta = 0.10) {
+  if (!"group" %in% colnames(metadata)) {
+    message("  -> metadata has no 'group' column; skip Top TF expression boxplot.")
+    return(invisible(NULL))
+  }
+
+  control_group <- Sys.getenv("CONTROL_GROUP", unset = "")
+  treat_group <- Sys.getenv("TREAT_GROUP", unset = "")
+  group_levels <- unique(as.character(metadata$group))
+  if (control_group %in% group_levels && treat_group %in% group_levels) {
+    group_levels <- c(control_group, treat_group, setdiff(group_levels, c(control_group, treat_group)))
+  }
+
+  gsea_ranked <- merged_res %>%
+    filter(!is.na(gsea_pval), gsea_pval < 0.05) %>%
+    arrange(desc(abs(ulm_score))) %>%
+    pull(ID)
+  activity_ranked <- contrast_df %>%
+    arrange(desc(abs(score))) %>%
+    pull(source)
+  selected_tfs <- unique(c(gsea_ranked, activity_ranked))
+  selected_tfs <- selected_tfs[selected_tfs %in% rownames(expr_mat_symbol)]
+  selected_tfs <- head(selected_tfs, n_top)
+
+  if (length(selected_tfs) == 0) {
+    message("  -> no top TFs are present in the expression matrix; skip Top TF expression boxplot.")
+    return(invisible(NULL))
+  }
+
+  metadata_ordered <- metadata[colnames(expr_mat_symbol), , drop = FALSE]
+  metadata_ordered$sample <- rownames(metadata_ordered)
+  metadata_ordered$group <- factor(as.character(metadata_ordered$group), levels = group_levels)
+
+  plot_data <- as.data.frame(t(expr_mat_symbol[selected_tfs, , drop = FALSE])) %>%
+    rownames_to_column("sample") %>%
+    pivot_longer(cols = -sample, names_to = "TF", values_to = "expression") %>%
+    left_join(metadata_ordered[, c("sample", "group")], by = "sample")
+
+  activity_lookup <- contrast_df %>%
+    select(TF = source, activity_score = score, activity_p = p_value)
+  gsea_lookup <- merged_res %>%
+    select(TF = ID, gsea_nes, gsea_pval)
+
+  expression_summary <- plot_data %>%
+    group_by(TF, group) %>%
+    summarise(mean_expression = mean(expression, na.rm = TRUE), .groups = "drop") %>%
+    pivot_wider(names_from = group, values_from = mean_expression)
+
+  if (control_group %in% colnames(expression_summary) && treat_group %in% colnames(expression_summary)) {
+    expression_summary$expression_delta <- expression_summary[[treat_group]] - expression_summary[[control_group]]
+  } else {
+    expression_summary$expression_delta <- NA_real_
+  }
+  expression_delta <- expression_summary %>% select(TF, expression_delta)
+
+  annotation <- tibble(TF = selected_tfs) %>%
+    left_join(activity_lookup, by = "TF") %>%
+    left_join(gsea_lookup, by = "TF") %>%
+    left_join(expression_delta, by = "TF") %>%
+    mutate(
+      expression_activity_relation = case_when(
+        is.na(expression_delta) | is.na(activity_score) ~ "weak",
+        abs(expression_delta) < weak_delta ~ "weak",
+        sign(expression_delta) == sign(activity_score) ~ "consistent",
+        TRUE ~ "opposite"
+      ),
+      label_color = case_when(
+        expression_activity_relation == "consistent" ~ "#2E8B57",
+        expression_activity_relation == "opposite" ~ "#C43C35",
+        TRUE ~ "#C17C00"
+      ),
+      TF = factor(TF, levels = selected_tfs)
+    )
+
+  plot_data <- plot_data %>%
+    mutate(TF = factor(TF, levels = selected_tfs))
+
+  label_cols <- annotation$label_color
+  names(label_cols) <- as.character(annotation$TF)
+
+  base_group_palette <- c("#2C7FB8", "#F06B2B", "#7A7A7A", "#8E6BBE", "#2CA25F", "#D95F0E")
+  group_palette <- setNames(rep(base_group_palette, length.out = length(group_levels)), group_levels)
+
+  p_tf_expression <- ggplot(plot_data, aes(x = TF, y = expression, color = group)) +
+    geom_boxplot(aes(fill = group), width = 0.38, alpha = 0.20, outlier.shape = NA,
+                 position = position_dodge(width = 0.62), linewidth = 0.35) +
+    geom_point(position = position_jitterdodge(jitter.width = 0.06, dodge.width = 0.62),
+               size = 1.8, alpha = 0.95) +
+    scale_color_manual(values = group_palette, drop = FALSE) +
+    scale_fill_manual(values = group_palette, drop = FALSE) +
+    labs(
+      title = paste0("Top ", length(selected_tfs), " TF Expression: ", treat_group, " vs ", control_group),
+      subtitle = "Gene names: Green=consistent, Yellow=weak, Red=opposite (expression vs predicted TF activity)",
+      x = NULL,
+      y = "Expression (VST normalized)",
+      color = "Group",
+      fill = "Group"
+    ) +
+    theme_bw(base_size = 11) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0, size = 13),
+      plot.subtitle = element_text(size = 8.5, color = "grey25"),
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, face = "bold",
+                                 color = label_cols[levels(plot_data$TF)]),
+      legend.position = "bottom"
+    )
+
+  write.csv(annotation,
+            file = file.path(tf_boxplot_dir, "Top20_TF_Expression_Boxplot_Annotation.csv"),
+            row.names = FALSE)
+  ggsave(file.path(tf_boxplot_dir, "TF_Expression_Vertical_Colored_Boxplot.png"),
+         p_tf_expression, width = 12, height = 6.2, dpi = 300)
+  ggsave(file.path(tf_boxplot_dir, "TF_Expression_Vertical_Colored_Boxplot.pdf"),
+         p_tf_expression, width = 12, height = 6.2)
+  message("  -> Top TF expression boxplot saved to: ", tf_boxplot_dir)
+  invisible(p_tf_expression)
+}
+
+make_top_tf_expression_plot(
+  contrast_df = contrast_df,
+  merged_res = merged_res,
+  expr_mat_symbol = expr_mat_symbol,
+  metadata = metadata,
+  tf_boxplot_dir = tf_boxplot_dir,
+  n_top = 20
+)
 
 p_concord <- ggplot(merged_res, aes(x = ulm_score, y = gsea_nes, color = Type)) +
   geom_point(alpha = 0.6) + geom_smooth(method = "lm", color = "black", linetype = "dashed", se = FALSE) +
