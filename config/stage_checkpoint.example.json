@@ -1,0 +1,14 @@
+{
+  "stage": "03_enrichment",
+  "approved": true,
+  "qc_reviewed": true,
+  "padj_threshold": 0.05,
+  "lfc_threshold": 1.0,
+  "volcano_label_count": 20,
+  "selected_genes": [],
+  "gsea_database": "Hallmark",
+  "gsea_pathway": "",
+  "ora_top_terms": 10,
+  "ppi_top_genes": 200,
+  "notes": "Create a fresh checkpoint only after the user approves this specific stage."
+}

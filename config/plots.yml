@@ -1,0 +1,31 @@
+qc:
+  pca: true
+  correlation: true
+  distance: true
+  library_size: true
+
+deg:
+  volcano: true
+  heatmap: true
+  selected_genes: true
+
+ora:
+  dotplot: true
+  lollipop: true
+  diverging_bar: true
+  cnet: false
+  heatplot: false
+  emap: false
+  sankey: true
+
+gsea:
+  nes_overview: true
+  curves: true
+  leading_edge_heatmap: true
+
+ppi:
+  module_overview: true
+  module_networks: true
+  hub_network: false
+  hub_table: true
+

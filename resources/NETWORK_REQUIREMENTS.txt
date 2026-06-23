@@ -1,0 +1,27 @@
+网络依赖与离线计划
+==================
+
+1. STRING PPI
+   - 风险：本地缓存缺失或基因集合变化时访问 STRING API。
+   - 缓存：resources/cache/stringdb/
+
+2. CollecTRI TF activity
+   - 风险：首次获取网络时访问 decoupleR/OmniPath。
+   - 缓存：resources/cache/collectri_human.rds
+
+3. PROGENy
+   - 风险：首次获取或更新网络时访问 decoupleR/OmniPath。
+   - 缓存：resources/cache/progeny_human_top500.rds
+
+4. KEGG Pathview
+   - 风险：未缓存的通路需要下载 KEGG XML 和 PNG。
+   - 缓存：resources/cache/pathview_kegg/
+
+5. R 包安装
+   - CRAN、Bioconductor 和 GitHub 包首次安装或升级需要网络。
+
+建议
+----
+正式分析前先运行资源缓存准备，并保存 resources/cache。
+网络中断时不要删除已有缓存；DESeq2、QC、本地 TF 数据库、自定义基因集和
+已有缓存支持的调控分析仍可继续运行。

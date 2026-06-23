@@ -1,0 +1,19 @@
+preset: journal
+font_family: Arial
+base_size: 11
+
+colors:
+  up: "#D73027"
+  down: "#4575B4"
+  neutral: "#BDBDBD"
+  control: "#4DBBD5"
+  treatment: "#E64B35"
+  positive: "#B2182B"
+  negative: "#2166AC"
+
+figure:
+  width: 7
+  height: 5
+  dpi: 300
+  background: white
+
