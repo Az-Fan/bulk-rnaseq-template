@@ -78,7 +78,13 @@ function Copy-ArtifactGroup(
         if ($purpose -eq "Records" -and -not $Target.StartsWith("99_Run")) { return }
         $relative = $_.FullName.Substring($root.Length).TrimStart('\', '/')
         $relativeDir = Split-Path -Parent $relative
-        $targetDir = Join-Path (Join-Path $Destination $Target) $purpose
+        $targetBase = Join-Path $Destination $Target
+        $targetLeaf = (($Target -split '[\\/]') | Select-Object -Last 1)
+        if ($targetLeaf -eq $purpose) {
+            $targetDir = $targetBase
+        } else {
+            $targetDir = Join-Path $targetBase $purpose
+        }
         if ($relativeDir) { $targetDir = Join-Path $targetDir $relativeDir }
         New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $targetDir $_.Name) -Force
