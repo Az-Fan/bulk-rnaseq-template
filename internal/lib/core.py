@@ -76,7 +76,14 @@ def validate_project(path: Path) -> dict:
     return cfg
 
 
-def validate_resources(registry_path: Path) -> list[dict]:
+def validate_resources(registry_path: Path, *, require_local_files: bool = True) -> list[dict]:
+    """Validate frozen-resource metadata and, for runnable checks, local files.
+
+    A clean Git clone intentionally excludes licensed/large resource payloads. CI can
+    therefore validate the committed registry with ``require_local_files=False``;
+    every operational caller keeps the strict default and verifies existence plus
+    SHA256 before counts import, analysis, or resource publication.
+    """
     registry = load_yaml(registry_path) or {}
     schema = json.loads((ROOT / "internal/schemas/resource.schema.json").read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
@@ -85,7 +92,7 @@ def validate_resources(registry_path: Path) -> list[dict]:
         for error in validator.iter_errors(resource):
             problems.append(f"{resource.get('resource_id', '<unknown>')}: {error.message}")
         local_path = resource.get("local_path")
-        if local_path:
+        if local_path and require_local_files:
             path = (registry_path.parent / local_path).resolve()
             if not path.exists():
                 problems.append(f"{resource.get('resource_id')}: local file is missing: {path}")
