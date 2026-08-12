@@ -8,12 +8,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
-      - uses: prefix-dev/setup-pixi@v0.9.1
+      - uses: prefix-dev/setup-pixi@v0.10.1
         with:
-          pixi-version: v0.55.0
+          pixi-version: v0.76.2
           cache: true
       - run: pixi install --locked --all
       - run: pixi run forbidden-check
