@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["resource_id", "species", "assembly", "release", "source_url", "downloaded_at", "sha256", "license_or_access_note"],
+  "properties": {
+    "resource_id": {"type": "string", "minLength": 1},
+    "species": {"enum": ["human", "mouse", "multi_species"]},
+    "assembly": {"type": ["string", "null"]},
+    "release": {"type": "string", "minLength": 1},
+    "source_url": {"type": "string", "minLength": 1},
+    "downloaded_at": {"type": "string", "format": "date-time"},
+    "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+    "license_or_access_note": {"type": "string", "minLength": 1}
+  }
+}
+

@@ -1,0 +1,94 @@
+[workspace]
+name = "bulk-rnaseq-v4"
+version = "4.0.0"
+description = "Portable Linux x86-64 bulk RNA-seq analysis platform"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[activation.env]
+OMP_NUM_THREADS = "1"
+OPENBLAS_NUM_THREADS = "1"
+MKL_NUM_THREADS = "1"
+VECLIB_MAXIMUM_THREADS = "1"
+NUMEXPR_NUM_THREADS = "1"
+R_DATATABLE_NUM_PROCS_PERCENT = "2"
+
+[dependencies]
+python = "3.12.*"
+pyyaml = "6.*"
+pandas = "2.3.*"
+numpy = "2.3.*"
+scipy = "1.16.*"
+matplotlib = "3.10.*"
+seaborn = "0.13.*"
+jsonschema = "4.*"
+pillow = "12.*"
+pytest = "8.*"
+r-base = "4.5.*"
+r-apear = { path = "internal/vendor/r-apear" }
+"r-data.table" = "1.17.*"
+r-yaml = "2.3.*"
+r-jsonlite = "2.*"
+r-digest = "0.6.*"
+r-ggplot2 = "4.*"
+r-ggrepel = "0.9.*"
+r-patchwork = "1.3.*"
+r-scales = "1.4.*"
+r-pheatmap = "1.0.*"
+r-openxlsx = "4.2.*"
+r-readxl = "1.4.*"
+r-ashr = "2.2.*"
+r-ragg = "1.5.*"
+r-svglite = "2.2.*"
+r-targets = "1.11.*"
+bioconductor-deseq2 = "1.50.*"
+bioconductor-summarizedexperiment = "1.40.*"
+aria2 = "1.37.*"
+bioconductor-fgsea = "1.36.*"
+bioconductor-gsva = "2.4.*"
+bioconductor-limma = "3.66.*"
+r-igraph = "2.2.*"
+r-png = "0.1.*"
+
+[tasks]
+pipeline = "python internal/cli/pipeline.py"
+init-project = "python internal/cli/pipeline.py init-project"
+doctor = "python internal/cli/pipeline.py doctor"
+check-project = "python internal/cli/pipeline.py check"
+import-counts = "python internal/cli/pipeline.py import-counts"
+analyze-staging = "Rscript workflow/run.R"
+analyze = "python internal/cli/pipeline.py analyze"
+modules = "python internal/cli/pipeline.py modules"
+upstream-plan = "python internal/cli/pipeline.py upstream-plan"
+upstream-run = "python internal/cli/pipeline.py upstream-run"
+publish-results = "python internal/reporting/publish_project_results.py"
+test = "pytest -q"
+forbidden-check = "python tests/check_forbidden.py"
+test-apear = "Rscript -e 'stopifnot(as.character(packageVersion(\"aPEAR\")) == \"1.0.0\")'"
+
+[feature.motif.dependencies]
+python = "3.10.*"
+matplotlib = "3.10.*"
+meme = "5.5.*"
+bedtools = "2.31.*"
+samtools = "1.22.*"
+gawk = "5.3.*"
+r-base = "4.5.*"
+"r-data.table" = "1.17.*"
+r-yaml = "2.3.*"
+r-jsonlite = "2.*"
+r-digest = "0.6.*"
+r-ggplot2 = "4.*"
+r-ggrepel = "0.9.*"
+r-patchwork = "1.3.*"
+r-scales = "1.4.*"
+r-svglite = "2.2.*"
+r-png = "0.1.*"
+
+[feature.motif.tasks]
+run-motif = "bash internal/motif/run_motif.sh"
+
+[environments]
+default = { features = [] }
+motif = { features = ["motif"], no-default-feature = true }

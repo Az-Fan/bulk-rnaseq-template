@@ -1,0 +1,27 @@
+ref:
+  star_index: /SERVER/PREBUILT/STAR_INDEX
+  gtf: /SERVER/REFERENCE/annotation.gtf
+fastqc: {threads: 4}
+fastp:
+  threads: 4
+  length_required: 36
+  qualified_quality_phred: 20
+  unqualified_percent_limit: 40
+  n_base_limit: 5
+  detect_adapter_for_pe: true
+star:
+  threads: 16
+  strandedness: reverse
+  extra: "--outFilterMultimapNmax 20 --outSAMattributes NH HI AS nM"
+samtools: {threads: 4}
+megadepth: {threads: 4}
+# Parsed by the pinned upstream Snakefile but never targeted by this adapter.
+deseq2: {padj_threshold: 0.05, lfc_threshold: 1}
+enrichment:
+  organism: human
+  gene_id_type: ENSEMBL
+  strip_version: true
+  rscript: DISABLED_BY_DOWNSTREAM_ADAPTER
+  run_kegg: false
+  pvalue_cutoff: 0.05
+  qvalue_cutoff: 0.2

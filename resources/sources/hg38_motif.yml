@@ -1,0 +1,23 @@
+schema_version: 1
+resources:
+  - resource_id: gencode_v49_grch38_primary_fasta
+    species: human
+    assembly: hg38
+    release: GENCODE 49 / GRCh38 primary assembly
+    filename: GRCh38.primary_assembly.genome.fa.gz
+    source_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49/GRCh38.primary_assembly.genome.fa.gz
+    license_or_access_note: GENCODE data are freely available; see GENCODE data access policy and source metadata.
+  - resource_id: gencode_v49_primary_gtf
+    species: human
+    assembly: hg38
+    release: GENCODE 49
+    filename: gencode.v49.primary_assembly.annotation.gtf.gz
+    source_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49/gencode.v49.primary_assembly.annotation.gtf.gz
+    license_or_access_note: GENCODE data are freely available; see GENCODE data access policy and source metadata.
+  - resource_id: jaspar_2026_core_vertebrates_meme
+    species: human
+    assembly: hg38
+    release: JASPAR 2026 CORE vertebrates non-redundant
+    filename: JASPAR2026_CORE_vertebrates_non-redundant_pfms_meme.txt
+    source_url: https://jaspar.elixir.no/download/data/2026/CORE/JASPAR2026_CORE_vertebrates_non-redundant_pfms_meme.txt
+    license_or_access_note: JASPAR is open access; cite the JASPAR 2026 release and observe upstream terms.

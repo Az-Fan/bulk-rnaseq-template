@@ -1,0 +1,92 @@
+schema_version: 4
+project_id: TEMPLATE
+species: human
+assembly: hg38
+
+counts_provenance:
+  source_method: unknown
+  feature_level: gene
+  normalization: unknown
+  technical_replicates: unknown
+  upstream_filtering: unknown
+  strandedness: unknown
+  genome_annotation: unknown
+  confirmed: false
+
+design:
+  formula: "~ group"
+  factor_levels:
+    group: [REFERENCE_LEVEL, COMPARISON_LEVEL]
+  display_factor: group
+  confirmed: false
+
+inputs:
+  counts_file: input/counts.tsv
+  samples_file: samples.tsv
+  contrasts_file: contrasts.tsv
+  qc_approval_file: qc_approval.yml
+  gene_id_column: gene_id
+  gene_symbol_column: gene_symbol
+  strip_gene_version: true
+
+# Must be answered for every project, even when upstream is not needed.
+upstream:
+  status: unconfirmed
+  confirmed: false
+  provider: xuzhougeng/omics-pipelines
+  repository: https://github.com/xuzhougeng/omics-pipelines.git
+  commit: ce4e2ec88da6663a32b7099c5850e1a51ad66952
+  workflow: rnaseq
+  execution_host: server
+  allow_wsl: false
+  target: results/04-quant/counts.tsv
+
+filtering:
+  min_count: 10
+  min_samples: 3
+
+thresholds:
+  mode: screening
+  padj: 0.05
+  abs_lfc: 1.0
+
+# Every decision remains unconfirmed until the user answers for this project.
+analysis:
+  random_seed: 104729
+  modules:
+    qc: {status: enabled, confirmed: false}
+    differential: {status: enabled, confirmed: false}
+    enrichment: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    regulation: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    network: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    motif_promoter: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    motif_peaks: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    custom_gene_sets: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    pathview: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    personalized: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+    wgcna: {status: skipped_by_user, reason: "Awaiting project initialization", confirmed: false}
+
+report:
+  detail: comprehensive
+export:
+  figures: all
+  formats: [pdf]
+
+resources:
+  frozen_only: true
+
+enrichment:
+  collections: [H, C2, C5]
+  min_size: 15
+  max_size: 500
+  overview_terms: 20
+  ora_overview_terms: 12
+  gsea_curves: 6
+
+qc:
+  clustering_method: complete
+compute:
+  max_workers: 3
+  threads_per_worker: 1
+migration:
+  requires_legacy_parity: false

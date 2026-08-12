@@ -1,42 +1,22 @@
-# Local input matrices and sequencing files
-data/*.count.xls
-data/*.count.tsv
-data/*.count.csv
-data/*counts*.xls
-data/*counts*.tsv
-data/*counts*.csv
-*.fastq
-*.fastq.gz
-*.fq
-*.fq.gz
-*.bam
-*.bai
-
-# Generated analysis
-results/
-work/
-/cache/
-.r-library/
-INPUT/*.xls
-INPUT/*.xlsx
-INPUT/*.csv
-!INPUT/sample_metadata.csv
-!INPUT/sample_metadata.example.csv
-
-# R and RStudio
-.Rhistory
-.RData
-.Ruserdata
-.Rproj.user/
-*.Rproj
-Rplots.pdf
-omnipathr-log/
-config/agent_checkpoint.json
-
-# Local environments and editor files
 .pixi/
-.venv/
-.vscode/
-.idea/
-Thumbs.db
+.pytest_cache/
+**/__pycache__/
+*.py[cod]
+
+# Frozen resources are local, large and may have redistribution restrictions.
+resources/data/
+
+# Project inputs, runtime and published results are not source code.
+projects/*/input/*
+projects/*/results/*
+projects/*/work/*
+!projects/_template/input/README.md
+!projects/_template/input/upstream/
+!projects/_template/input/upstream/*.example
+!projects/_template/results/README.md
+!projects/_template/work/README.md
+
+# Local logs and editor files.
+*.log
 .DS_Store
+Thumbs.db

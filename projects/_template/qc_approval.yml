@@ -1,0 +1,6 @@
+schema_version: 1
+approved: false
+counts_sha256: REPLACE_AFTER_IMPORT
+approved_at: null
+approved_by: null
+note: "Approve only after inspecting QC; no sample is excluded automatically."

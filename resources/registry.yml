@@ -1,0 +1,187 @@
+schema_version: 1
+resources:
+- resource_id: legacy_do_primary_hdo_result
+  species: human
+  assembly: not_applicable
+  release: historical v3 frozen result
+  source_url: historical-project://FKBP1A-PAI/Primary/HDO
+  downloaded_at: '2026-08-12T00:00:00+00:00'
+  sha256: 47363eec1d7573515030e29aa47e8f0632c8a90eea2c154c43f97a1f80ec7d6e
+  license_or_access_note: Locally generated analysis output; original HDO annotation release was not recorded.
+  local_path: data/FKBP1A-PAI/cache/legacy_do/Primary_padj0.05_LFC1.0_DO_filtered_enrichment.csv
+- resource_id: legacy_do_exploratory_hdo_result
+  species: human
+  assembly: not_applicable
+  release: historical v3 frozen result
+  source_url: historical-project://FKBP1A-PAI/Exploratory/HDO
+  downloaded_at: '2026-08-12T00:00:00+00:00'
+  sha256: 47363eec1d7573515030e29aa47e8f0632c8a90eea2c154c43f97a1f80ec7d6e
+  license_or_access_note: Locally generated analysis output; original HDO annotation release was not recorded.
+  local_path: data/FKBP1A-PAI/cache/legacy_do/Exploratory_padj0.05_LFC0.5_DO_filtered_enrichment.csv
+- resource_id: NETWORK_REQUIREMENTS.txt
+  species: human
+  assembly: hg38
+  release: legacy frozen snapshot
+  source_url: historical-project://FKBP1A-PAI
+  downloaded_at: '2026-06-23T08:01:03.596801+00:00'
+  sha256: ff2dccbdbe9cc3aa7372d1a0d190b99ef64c34a144d804c28cb6e483ad4c1ca3
+  license_or_access_note: Imported from historical project; verify upstream license
+    before redistribution
+  local_path: data/FKBP1A-PAI/NETWORK_REQUIREMENTS.txt
+- resource_id: cache_collectri_human.rds
+  species: human
+  assembly: hg38
+  release: legacy frozen snapshot
+  source_url: historical-project://OmniPath/CollecTRI
+  downloaded_at: '2026-06-22T20:16:42.161128+00:00'
+  sha256: 9ce1f6055e64a23cbc471d4ae953f5e624067fbc95d83fbe442086e4a8fb2376
+  license_or_access_note: Imported from historical project cache; OmniPath terms apply
+  local_path: data/FKBP1A-PAI/cache/collectri_human.rds
+- resource_id: cache_omnipath_cache.json
+  species: human
+  assembly: hg38
+  release: legacy frozen snapshot
+  source_url: historical-project://FKBP1A-PAI
+  downloaded_at: '2026-06-23T08:04:47.517123+00:00'
+  sha256: a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f
+  license_or_access_note: Imported from historical project; verify upstream license
+    before redistribution
+  local_path: data/FKBP1A-PAI/cache/omnipath/cache.json
+- resource_id: cache_pathview_kegg_hsa04110.png
+  species: human
+  assembly: hg38
+  release: legacy frozen KEGG snapshot
+  source_url: historical-project://KEGG/Pathview
+  downloaded_at: '2026-06-23T07:22:01.923379+00:00'
+  sha256: d044c0451b612030dd0779da45cff31845951b6bf597ff8e7ef385ce36e4e223
+  license_or_access_note: Imported for reproducibility; KEGG access and redistribution
+    terms apply
+  local_path: data/FKBP1A-PAI/cache/pathview_kegg/hsa04110.png
+- resource_id: cache_pathview_kegg_hsa04110.xml
+  species: human
+  assembly: hg38
+  release: legacy frozen KEGG snapshot
+  source_url: historical-project://KEGG/Pathview
+  downloaded_at: '2026-06-23T07:21:50.371435+00:00'
+  sha256: 4806e1b7e7d2be18ed300aaef975578f60e9c66217350bbe017a02e79fffc5a3
+  license_or_access_note: Imported for reproducibility; KEGG access and redistribution
+    terms apply
+  local_path: data/FKBP1A-PAI/cache/pathview_kegg/hsa04110.xml
+- resource_id: cache_pathview_kegg_hsa04151.png
+  species: human
+  assembly: hg38
+  release: legacy frozen KEGG snapshot
+  source_url: historical-project://KEGG/Pathview
+  downloaded_at: '2026-06-23T07:21:41.936165+00:00'
+  sha256: e51dcb1d6d4785b90e7fbc448cf0cf4e3c8bad83e37f0b07e905e606ec80f62b
+  license_or_access_note: Imported for reproducibility; KEGG access and redistribution
+    terms apply
+  local_path: data/FKBP1A-PAI/cache/pathview_kegg/hsa04151.png
+- resource_id: cache_pathview_kegg_hsa04151.xml
+  species: human
+  assembly: hg38
+  release: legacy frozen KEGG snapshot
+  source_url: historical-project://KEGG/Pathview
+  downloaded_at: '2026-06-23T07:21:35.070844+00:00'
+  sha256: cd032521eb2dbc96555003073b7232e66c32c13584e42b8f9c4a36a71356454f
+  license_or_access_note: Imported for reproducibility; KEGG access and redistribution
+    terms apply
+  local_path: data/FKBP1A-PAI/cache/pathview_kegg/hsa04151.xml
+- resource_id: cache_progeny_human_top500.rds
+  species: human
+  assembly: hg38
+  release: legacy frozen top500 snapshot
+  source_url: historical-project://OmniPath/PROGENy
+  downloaded_at: '2026-06-22T19:16:40.389627+00:00'
+  sha256: 76ae5bc5d4e698ad1cc455b6dbb41cd8e9f74f42f9b7802e0757f204ad5223fa
+  license_or_access_note: Imported from historical project cache; PROGENy/OmniPath
+    terms apply
+  local_path: data/FKBP1A-PAI/cache/progeny_human_top500.rds
+- resource_id: cache_stringdb_string_edges_project.csv
+  species: human
+  assembly: hg38
+  release: legacy project subnetwork
+  source_url: historical-project://STRING
+  downloaded_at: '2026-06-22T19:14:56.530816+00:00'
+  sha256: 040e51ac3d3a3f058aa02aa20467f71ae34725ce9b7692ff4268fddcdd1da3a9
+  license_or_access_note: Derived frozen project subnetwork; STRING terms apply
+  local_path: data/FKBP1A-PAI/cache/stringdb/string_edges_project.csv
+- resource_id: gencode_v49_grch38_primary_fasta
+  species: human
+  assembly: hg38
+  release: GENCODE 49 / GRCh38 primary assembly
+  source_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49/GRCh38.primary_assembly.genome.fa.gz
+  downloaded_at: '2026-08-12T07:24:06.158695+00:00'
+  sha256: 3023c0705e83e86309271b09e25bdf678945fac98ce2fe5bb6b6e068f2225452
+  license_or_access_note: GENCODE data are freely available; see GENCODE data access
+    policy and source metadata.
+  local_path: data/shared/hg38-motif/GRCh38.primary_assembly.genome.fa.gz
+- resource_id: gencode_v49_primary_gtf
+  species: human
+  assembly: hg38
+  release: GENCODE 49
+  source_url: https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_49/gencode.v49.primary_assembly.annotation.gtf.gz
+  downloaded_at: '2026-08-12T07:24:06.212076+00:00'
+  sha256: 5cabe88e93064851dc6cb826efe0e8b7babf7985e73df280cfb05910d05cd023
+  license_or_access_note: GENCODE data are freely available; see GENCODE data access
+    policy and source metadata.
+  local_path: data/shared/hg38-motif/gencode.v49.primary_assembly.annotation.gtf.gz
+- resource_id: gene_sets_custom_gene_sets.xlsx
+  species: human
+  assembly: hg38
+  release: project-authored snapshot
+  source_url: historical-project://FKBP1A-PAI/custom-gene-sets
+  downloaded_at: '2026-06-22T16:10:17.748580+00:00'
+  sha256: 2e5b0f8383f3196ffa85a45b625a41c59d425cfdcf54adfb1d3f988a2755d4f2
+  license_or_access_note: User-provided project resource
+  local_path: data/FKBP1A-PAI/gene_sets/custom_gene_sets.xlsx
+- resource_id: jaspar_2026_core_vertebrates_meme
+  species: human
+  assembly: hg38
+  release: JASPAR 2026 CORE vertebrates non-redundant
+  source_url: https://jaspar.elixir.no/download/data/2026/CORE/JASPAR2026_CORE_vertebrates_non-redundant_pfms_meme.txt
+  downloaded_at: '2026-08-12T07:24:06.212628+00:00'
+  sha256: ae4f77a17256c7b8b7b73402810c1ecf4fc411e9ad7832cdc87d586dee9a4a15
+  license_or_access_note: JASPAR is open access; cite the JASPAR 2026 release and
+    observe upstream terms.
+  local_path: data/shared/hg38-motif/JASPAR2026_CORE_vertebrates_non-redundant_pfms_meme.txt
+- resource_id: msigdb.2025.1.Hs.rds
+  species: human
+  assembly: hg38
+  release: legacy frozen snapshot
+  source_url: historical-project://FKBP1A-PAI
+  downloaded_at: '2026-08-11T19:25:18.315459+00:00'
+  sha256: 32617446fbcb71306c534d730f6243b09de922883870d954b8194f6b980ad663
+  license_or_access_note: Imported from historical project; verify upstream license
+    before redistribution
+  local_path: data/shared/msigdb-2025.1/msigdb.2025.1.Hs.rds
+- resource_id: msigdb_h.all.v2025.1.Hs.symbols.gmt
+  species: human
+  assembly: hg38
+  release: MSigDB 2025.1
+  source_url: https://www.gsea-msigdb.org/gsea/msigdb
+  downloaded_at: '2026-06-22T16:10:17.854067+00:00'
+  sha256: 646d79378376cd6f4ad8eda33732ec1850c6ea7366bad67a71b5d889d9f8c85b
+  license_or_access_note: Imported from authorized historical project cache; MSigDB
+    access terms apply
+  local_path: data/FKBP1A-PAI/msigdb/h.all.v2025.1.Hs.symbols.gmt
+- resource_id: tf_databases_ENCODE_TF_ChIP-seq_2015.txt
+  species: human
+  assembly: hg38
+  release: ENCODE TF ChIP-seq 2015
+  source_url: historical-project://Enrichr/ENCODE-2015
+  downloaded_at: '2026-06-22T16:10:17.843071+00:00'
+  sha256: 2129da24b33fa7deaf147aca104d506aded4f0f4ae33b19b4c7b80d19c2385fc
+  license_or_access_note: Imported from historical project; upstream database terms
+    apply
+  local_path: data/FKBP1A-PAI/tf_databases/ENCODE_TF_ChIP-seq_2015.txt
+- resource_id: tf_databases_ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X.txt
+  species: human
+  assembly: hg38
+  release: legacy frozen snapshot
+  source_url: historical-project://Enrichr/ChEA-ENCODE-consensus
+  downloaded_at: '2026-06-22T16:10:17.848610+00:00'
+  sha256: 299fc1e69914e54490f748c21692d4e0d371d12934ef86066be1a70ee2abc6c6
+  license_or_access_note: Imported from historical project; upstream database terms
+    apply
+  local_path: data/FKBP1A-PAI/tf_databases/ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X.txt

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "species", "assembly", "counts_provenance", "design", "inputs", "upstream", "filtering", "thresholds", "analysis", "report", "export", "resources"],
+  "properties": {
+    "schema_version": {"const": 4},
+    "project_id": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+    "species": {"enum": ["human", "mouse"]},
+    "assembly": {"enum": ["hg38", "mm10", "mm39"]},
+    "counts_provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_method", "feature_level", "normalization", "technical_replicates", "upstream_filtering", "strandedness", "confirmed"],
+      "properties": {
+        "source_method": {"enum": ["featureCounts", "STAR", "Salmon_tximport", "other", "unknown"]},
+        "feature_level": {"enum": ["gene", "transcript", "unknown"]},
+        "normalization": {"enum": ["raw_counts", "TPM", "FPKM", "CPM", "batch_corrected", "other_normalized", "unknown"]},
+        "technical_replicates": {"enum": ["none", "present", "unknown"]},
+        "upstream_filtering": {"type": "string", "minLength": 1},
+        "strandedness": {"enum": ["unstranded", "forward", "reverse", "unknown"]},
+        "genome_annotation": {"type": "string"},
+        "confirmed": {"type": "boolean"}
+      }
+    },
+    "design": {
+      "type": "object", "additionalProperties": false,
+      "required": ["formula", "factor_levels", "confirmed"],
+      "properties": {
+        "formula": {"type": "string", "pattern": "^~"},
+        "factor_levels": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": ["string", "number"]}}},
+        "display_factor": {"type": "string", "minLength": 1},
+        "confirmed": {"type": "boolean"}
+      }
+    },
+    "inputs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["counts_file", "samples_file", "contrasts_file", "qc_approval_file", "gene_id_column"],
+      "properties": {
+        "counts_file": {"type": "string", "minLength": 1},
+        "samples_file": {"type": "string", "minLength": 1},
+        "contrasts_file": {"type": "string", "minLength": 1},
+        "qc_approval_file": {"type": "string", "minLength": 1},
+        "gene_id_column": {"type": "string", "minLength": 1},
+        "gene_symbol_column": {"type": "string", "minLength": 1},
+        "strip_gene_version": {"type": "boolean"}
+      }
+    },
+    "upstream": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "confirmed", "provider", "repository", "commit", "workflow", "execution_host", "allow_wsl", "target"],
+      "properties": {
+        "status": {"enum": ["unconfirmed", "disabled", "enabled"]},
+        "confirmed": {"type": "boolean"},
+        "provider": {"const": "xuzhougeng/omics-pipelines"},
+        "repository": {"const": "https://github.com/xuzhougeng/omics-pipelines.git"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "workflow": {"const": "rnaseq"},
+        "execution_host": {"enum": ["server", "local_linux"]},
+        "allow_wsl": {"type": "boolean"},
+        "samples_file": {"type": "string", "minLength": 1},
+        "config_file": {"type": "string", "minLength": 1},
+        "target": {"const": "results/04-quant/counts.tsv"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "enabled"}}},
+        "then": {"required": ["samples_file", "config_file"]}
+      }]
+    },
+    "filtering": {
+      "type": "object", "additionalProperties": false, "required": ["min_count", "min_samples"],
+      "properties": {"min_count": {"type": "integer", "minimum": 0}, "min_samples": {"type": "integer", "minimum": 1}}
+    },
+    "thresholds": {
+      "type": "object", "additionalProperties": false, "required": ["mode"],
+      "properties": {
+        "mode": {"enum": ["screening", "lfc_threshold_test"]},
+        "padj": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "abs_lfc": {"type": "number", "minimum": 0},
+        "profiles": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/profile"}}
+      },
+      "anyOf": [{"required": ["padj", "abs_lfc"]}, {"required": ["profiles"]}]
+    },
+    "analysis": {
+      "type": "object", "additionalProperties": false, "required": ["modules", "random_seed"],
+      "properties": {
+        "random_seed": {"type": "integer", "minimum": 1},
+        "modules": {
+          "type": "object", "additionalProperties": false,
+          "required": ["qc", "differential", "enrichment", "regulation", "network", "motif_promoter", "motif_peaks", "custom_gene_sets", "pathview", "personalized", "wgcna"],
+          "properties": {
+            "qc": {"$ref": "#/$defs/moduleDecision"}, "differential": {"$ref": "#/$defs/moduleDecision"},
+            "enrichment": {"$ref": "#/$defs/moduleDecision"}, "regulation": {"$ref": "#/$defs/moduleDecision"},
+            "network": {"$ref": "#/$defs/moduleDecision"}, "motif_promoter": {"$ref": "#/$defs/moduleDecision"},
+            "motif_peaks": {"$ref": "#/$defs/moduleDecision"}, "custom_gene_sets": {"$ref": "#/$defs/moduleDecision"},
+            "pathview": {"$ref": "#/$defs/moduleDecision"}, "personalized": {"$ref": "#/$defs/moduleDecision"},
+            "wgcna": {"$ref": "#/$defs/moduleDecision"}
+          }
+        }
+      }
+    },
+    "report": {"type": "object", "additionalProperties": false, "required": ["detail"], "properties": {"detail": {"enum": ["concise", "standard", "comprehensive"]}}},
+    "export": {
+      "type": "object", "additionalProperties": false, "required": ["figures", "formats"],
+      "properties": {
+        "figures": {"enum": ["core", "publication", "all"]},
+        "formats": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"enum": ["pdf", "png"]}, "contains": {"const": "pdf"}
+        }
+      }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false, "required": ["frozen_only"],
+      "properties": {
+        "frozen_only": {"const": true}, "enrichment_gene_sets": {"type": "string"},
+        "activity": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "network": {"type": "string"}, "motif_fasta": {"type": "string"},
+        "motif_gtf": {"type": "string"}, "motif_database": {"type": "string"}
+      }
+    },
+    "enrichment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "collections": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "min_size": {"type": "integer", "minimum": 10}, "max_size": {"type": "integer", "minimum": 10},
+        "overview_terms": {"type": "integer", "minimum": 1}, "ora_overview_terms": {"type": "integer", "minimum": 1}, "gsea_curves": {"type": "integer", "minimum": 0}
+      }
+    },
+    "exploratory": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "target_genes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "custom_gene_sets": {"type": "object"}, "pathview": {"type": "object"},
+        "personalized": {"type": "object"}, "wgcna": {"type": "object"}
+      }
+    },
+    "motif": {"type": "object", "additionalProperties": false, "properties": {"background_matching": {"type": "object", "properties": {"gc": {"const": true}, "promoter_length": {"const": true}, "base_expression": {"const": true}}, "required": ["gc", "promoter_length", "base_expression"]}}},
+    "qc": {"type": "object", "additionalProperties": false, "properties": {"clustering_method": {"enum": ["complete", "average", "ward.D2"]}}},
+    "compute": {"type": "object", "additionalProperties": false, "properties": {"max_workers": {"type": "integer", "minimum": 1, "maximum": 3}, "threads_per_worker": {"const": 1}}},
+    "migration": {"type": "object", "additionalProperties": false, "required": ["requires_legacy_parity"], "properties": {"requires_legacy_parity": {"type": "boolean"}}}
+  },
+  "$defs": {
+    "profile": {"type": "object", "additionalProperties": false, "required": ["padj", "abs_lfc"], "properties": {"padj": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}, "abs_lfc": {"type": "number", "minimum": 0}}},
+    "moduleDecision": {
+      "type": "object", "additionalProperties": false, "required": ["status", "confirmed"],
+      "properties": {"status": {"enum": ["enabled", "not_applicable", "skipped_by_user"]}, "reason": {"type": "string"}, "confirmed": {"type": "boolean"}},
+      "allOf": [{"if": {"properties": {"status": {"enum": ["not_applicable", "skipped_by_user"]}}}, "then": {"required": ["reason"], "properties": {"reason": {"minLength": 3}}}}]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.R text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.tsv text eol=lf
+*.pdf binary
+*.png binary
+*.rds binary
+*.gz binary

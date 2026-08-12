@@ -1,0 +1,3 @@
+[submodule "internal/upstream/omics-pipelines"]
+	path = internal/upstream/omics-pipelines
+	url = https://github.com/xuzhougeng/omics-pipelines.git

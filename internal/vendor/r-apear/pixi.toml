@@ -1,0 +1,10 @@
+[package]
+name = "r-apear"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "pixi-build-r", version = "==0.1.6", channels = ["conda-forge"] }
+
+[package.build.config]
+extra-args = ["--no-multiarch", "--no-test-load"]
+compilers = []

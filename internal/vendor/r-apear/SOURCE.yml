@@ -1,0 +1,8 @@
+package: aPEAR
+version: 1.0.0
+source_url: https://github.com/cran/aPEAR/archive/e0496e4657993a38d5a326d1239537423a4b5cab.tar.gz
+source_commit: e0496e4657993a38d5a326d1239537423a4b5cab
+archive_sha256: b3af2fb5a4646a9c15054a39daa21020c0fd2cf497cfdaafc4a05d2d198dc008
+build_backend: pixi-build-r
+build_backend_version: 0.1.6
+license: MIT
