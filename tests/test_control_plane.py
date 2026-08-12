@@ -74,10 +74,30 @@ def test_unconfirmed_upstream_decision_is_rejected(tmp_path):
         validate_project(path)
 
 
-def test_frozen_resource_registry_is_valid():
-    resources = validate_resources(ROOT / "resources/registry.yml")
+def test_frozen_resource_registry_metadata_is_valid_in_clean_clone():
+    resources = validate_resources(ROOT / "resources/registry.yml", require_local_files=False)
     assert resources
     assert all(len(resource["sha256"]) == 64 for resource in resources)
+
+
+def test_runtime_resource_validation_stays_strict(tmp_path):
+    registry = tmp_path / "registry.yml"
+    registry.write_text(
+        yaml.safe_dump({"schema_version": 1, "resources": [{
+            "resource_id": "missing_resource",
+            "species": "Homo sapiens",
+            "assembly": "GRCh38",
+            "release": "test",
+            "source_url": "https://example.org/resource.tsv",
+            "downloaded_at": "2026-08-13T00:00:00+00:00",
+            "sha256": "0" * 64,
+            "license_or_access_note": "test only",
+            "local_path": "data/resource.tsv",
+        }]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="local file is missing"):
+        validate_resources(registry)
 
 
 def test_missing_output_fails_inventory(tmp_path):
