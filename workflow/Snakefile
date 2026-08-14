@@ -1,0 +1,194 @@
+"""Bulk RNA-seq v4 DAG.
+
+Snakemake owns scheduling, caching and resources only. Scientific decisions
+remain in the seven numbered R modules and their regression contracts.
+"""
+
+from pathlib import Path
+
+PROJECT = Path(config["project"]).resolve()
+RUN = Path(config["run_dir"]).resolve()
+ROOT = Path(workflow.basedir).parent.resolve()
+
+MODULES = [
+    "01_QC", "02_Differential", "03_Enrichment", "04_Regulation",
+    "05_Network", "06_Motif", "07_Exploratory",
+]
+
+
+def marker(module):
+    return str(RUN / "Provenance" / f"{module}_status.tsv")
+
+
+rule all:
+    input:
+        str(RUN / "run_manifest.json"),
+        str(RUN / "index.html"),
+
+
+rule optional_upstream_contract:
+    """The upstream repository is never entered implicitly.
+
+    When enabled, the separately confirmed server-side adapter must first
+    produce the declared counts target. Downstream Snakemake still begins from
+    an immutable imported counts matrix and its source manifest.
+    """
+    output:
+        touch(str(RUN / "Provenance" / "upstream_contract_checked")),
+    run:
+        import yaml
+        cfg = yaml.safe_load((PROJECT / "project.yml").read_text())
+        upstream = cfg["upstream"]
+        if not upstream.get("confirmed") or upstream.get("status") == "unconfirmed":
+            raise ValueError("Upstream-data availability must be explicitly confirmed")
+        if upstream.get("status") == "enabled":
+            manifest = PROJECT / "input" / "upstream_run_manifest.json"
+            if not manifest.is_file():
+                raise ValueError("Enabled upstream requires a confirmed server run and imported upstream_run_manifest.json")
+
+
+rule initialize:
+    input:
+        upstream=rules.optional_upstream_contract.output,
+        project=str(PROJECT / "project.yml"),
+        samples=str(PROJECT / "samples.tsv"),
+        contrasts=str(PROJECT / "contrasts.tsv"),
+        approval=str(PROJECT / "qc_approval.yml"),
+    output:
+        state=str(RUN / "Provenance" / "context_00_initialized.rds"),
+    log:
+        str(RUN / "Logs" / "00_initialize.log"),
+    threads: 1
+    resources:
+        mem_mb=1024,
+    shell:
+        "BULK_RNASEQ_SNAKEMAKE=1 Rscript {ROOT}/workflow/snakemake/run_module.R initialize "
+        "{PROJECT} {RUN} {output.state} > {log} 2>&1"
+
+
+rule qc:
+    input:
+        state=rules.initialize.output.state,
+    output:
+        state=str(RUN / "Provenance" / "context_01_qc.rds"),
+        status=marker("01_QC"),
+    log:
+        str(RUN / "Logs" / "01_qc.log"),
+    threads: 1
+    resources:
+        mem_mb=4096,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/run_module.R 01_QC {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule differential:
+    input:
+        state=rules.qc.output.state,
+    output:
+        state=str(RUN / "Provenance" / "context_02_differential.rds"),
+        status=marker("02_Differential"),
+    log:
+        str(RUN / "Logs" / "02_differential.log"),
+    threads: 1
+    resources:
+        mem_mb=6144,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/run_module.R 02_Differential {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule enrichment:
+    input:
+        state=rules.differential.output.state,
+    output:
+        state=str(RUN / "Provenance" / "context_03_enrichment.rds"),
+        status=marker("03_Enrichment"),
+    log:
+        str(RUN / "Logs" / "03_enrichment.log"),
+    threads: 1
+    resources:
+        mem_mb=4096,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/run_module.R 03_Enrichment {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule regulation:
+    input:
+        state=rules.enrichment.output.state,
+    output:
+        state=str(RUN / "Provenance" / "context_04_regulation.rds"),
+        status=marker("04_Regulation"),
+    log:
+        str(RUN / "Logs" / "04_regulation.log"),
+    threads: 1
+    resources:
+        mem_mb=4096,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/run_module.R 04_Regulation {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule network:
+    input:
+        state=rules.differential.output.state,
+    output:
+        state=str(RUN / "Provenance" / "context_05_network.rds"),
+        status=marker("05_Network"),
+    log:
+        str(RUN / "Logs" / "05_network.log"),
+    threads: 1
+    resources:
+        mem_mb=3072,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/run_module.R 05_Network {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule motif:
+    input:
+        state=rules.differential.output.state,
+    output:
+        state=str(RUN / "Provenance" / "context_06_motif.rds"),
+        status=marker("06_Motif"),
+    log:
+        str(RUN / "Logs" / "06_motif.log"),
+    threads: 1
+    resources:
+        mem_mb=3072,
+    shell:
+        "BULK_RNASEQ_MOTIF_PHASE=1 PATH={ROOT}/.pixi/envs/motif/bin:$PATH "
+        "{ROOT}/.pixi/envs/motif/bin/Rscript {ROOT}/workflow/snakemake/run_module.R "
+        "06_Motif {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule exploratory:
+    input:
+        state=rules.regulation.output.state,
+        enrichment=rules.enrichment.output.status,
+        network=rules.network.output.status,
+    output:
+        state=str(RUN / "Provenance" / "context_07_exploratory.rds"),
+        status=marker("07_Exploratory"),
+    log:
+        str(RUN / "Logs" / "07_exploratory.log"),
+    threads: 1
+    resources:
+        mem_mb=3072,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/run_module.R 07_Exploratory {PROJECT} {RUN} {output.state} {input.state} > {log} 2>&1"
+
+
+rule finalize:
+    input:
+        states=[rules.qc.output.state, rules.differential.output.state,
+                rules.enrichment.output.state, rules.regulation.output.state,
+                rules.network.output.state, rules.motif.output.state,
+                rules.exploratory.output.state],
+        statuses=[marker(module) for module in MODULES],
+    output:
+        manifest=str(RUN / "run_manifest.json"),
+        index=str(RUN / "index.html"),
+    log:
+        str(RUN / "Logs" / "99_finalize.log"),
+    threads: 1
+    resources:
+        mem_mb=1024,
+    shell:
+        "Rscript {ROOT}/workflow/snakemake/finalize.R {PROJECT} {RUN} > {log} 2>&1"

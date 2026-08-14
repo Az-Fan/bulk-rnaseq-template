@@ -1,0 +1,13 @@
+schema_version: 1
+resources:
+  - resource_id: msigdbr_7.5.1_source
+    species: multi_species
+    assembly: not_applicable
+    release: msigdbr 7.5.1 / MSigDB 7.5.1
+    filename: msigdbr_7.5.1.tar.gz
+    source_url: https://cran.r-project.org/src/contrib/Archive/msigdbr/msigdbr_7.5.1.tar.gz
+    sha256: dc30487bdf3594425ae9faec1ca0d7d0cd7278f4f177689133f92880e74acaca
+    license_or_access_note: >-
+      Archived CRAN source used only as a frozen data resource. MSigDB gene-set
+      data remain subject to the Broad Institute MSigDB terms; this archive is
+      not installed as an R package during analysis.

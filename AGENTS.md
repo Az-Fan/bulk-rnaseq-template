@@ -1,196 +1,177 @@
 # Bulk RNA-seq v4：Agent 强制执行合同
 
-所有 Agent 在本仓库行动前必须完整阅读本文件。这里是“一仓库、多项目、固定结构、
-单 Pixi、结果易查”的通用分析平台，不是一次性项目目录。
+所有 Agent 在本仓库中行动前，必须完整阅读本文件。本项目是“一仓库、多项目、固定结构、单 Pixi、正式运行离线”的通用 Bulk RNA-seq 平台，不是一次性分析目录。
 
 ## 1. 不可违反的规则
 
-1. 不修改、移动、覆盖或删除用户原始数据、v3、历史项目或已发布结果。
-2. 不引入 renv、BiocManager::install、install.packages、remotes::install_*、系统
-   Rscript 或第二套下游包管理流程；用户只需 `pixi install --locked --all`。
-3. 正式运行不联网、不更新数据库、不安装依赖。`resources-sync` 是唯一资源联网阶段，
-   且必须得到明确批准。
-4. 不静默跳过模块，不静默猜测设计、物种、comparison、reference level 或 counts
-   来源；未确认必须停止。
-5. 每一次分析前都必须重新向用户展示模块清单并获得本次确认。旧配置中的确认不能
-   代替本次询问。
-6. 不因精简目录、报告或图件数量而删除分析能力、完整数值结果或 provenance。
-7. 不用 TPM/FPKM/CPM、批次校正值或其他非 raw counts 做 DESeq2 检验。
-8. motif、TF activity、PROGENy、PPI hub/module 只可解释为关联或探索证据，不写成
-   直接结合或因果机制。
-9. 原始输入只读；导入时复制并保存来源、字节数和 SHA256。
-10. 不手工编辑正式 `results/` 或 `work/history/published/`。
-11. 新图必须实际渲染检查；不能只确认代码成功。
-12. 统计方法变更必须补单元测试、通用集成测试，并在用户提供历史基线时做文件级和
-    数值回归。
-13. 删除缓存、运行或资源前必须展示解析后的绝对目标、预计空间和确认令牌；默认 dry-run。
-14. 个性化代码只能读取标准产物，不得复制或改写核心统计链。
-15. 未经用户明确批准，不得改变本文件定义的仓库或项目结构。
+1. 不修改、移动、覆盖或删除原始数据、历史项目、v3、已发布结果及用户提供的旧结果。
+2. 不引入 renv、BiocManager、`install.packages()`、`remotes::install_*`、系统 R 或第二套包管理流程。用户只执行 `pixi install --locked --all`。
+3. 正式分析不联网、不安装依赖、不更新数据库。`resources-sync` 是唯一资源联网阶段，且必须单独获批。
+4. 不猜测 counts 来源、物种、assembly、设计、参考水平、contrast、模块或分析参数；未确认即停止。
+5. 每次正式运行都必须重新展示完整分析计划并取得本次确认。项目中过去的 `confirmed: true` 不能代替当前对话中的确认。
+6. 不静默跳过启用模块；不完整或未实现的模块必须阻止运行，不能标记为完成。
+7. 不因精简目录、报告或图件数量而删除分析能力、完整数值表或 provenance。
+8. 不使用 TPM、FPKM、CPM、批次校正值或其他非 raw counts 做 DESeq2 检验。
+9. 技术重复不得当作生物学重复；必须先明确其合并策略。
+10. 原始输入只读；导入时复制并保存来源、字节数和 SHA256。
+11. 不手工编辑正式 `results/` 或 `work/history/published/`。
+12. motif、TF/PROGENy activity、PPI hub/module 只能解释为关联或探索证据，不能写成直接结合或因果机制。
+13. 新图必须实际渲染检查；不能只看代码是否成功。
+14. 统计方法变化必须补单元测试、通用集成测试；存在历史基线时还必须做文件级和数值回归。
+15. 删除缓存、运行或资源前必须先 dry-run，展示解析后的绝对路径、文件数、预计空间和确认令牌。
+16. 个性化代码只能读取标准产物，不能复制或改写核心统计链。
+17. 未经用户明确批准，不改变本文件定义的仓库和项目结构。
 
-## 2. 固定目录树与职责
+## 2. 固定目录树
 
 ```text
 bulk-rnaseq-v4/
-├── README.md                         # 生信使用者入口
-├── AGENTS.md                         # 本合同
-├── pixi.toml                         # 唯一公开命令和软件声明
-├── pixi.lock                         # 唯一锁文件
-├── workflow/                         # 用户可审查的科学方法层
-│   ├── run.R                         # 只编排，不隐藏统计决策
-│   ├── functions.R                   # 共享科学、I/O、主题和绘图函数
+├── README.md                         # 生信使用者唯一入口
+├── AGENTS.md                         # Agent 执行合同
+├── pixi.toml / pixi.lock             # 唯一软件环境和锁文件
+├── workflow/                         # 可审查的科学方法层
+│   ├── Snakefile                     # 正式 DAG：依赖、资源和断点续跑
+│   ├── functions.R                   # 共享验证、I/O、图形与导出函数
 │   ├── 01_qc.R                       # counts/sample QC、PCA、相关性、聚类
 │   ├── 02_differential.R             # DESeq2、contrast、LFC 收缩、DEG
-│   ├── 03_enrichment.R               # ORA、GSEA、Pathview
-│   ├── 04_activity.R                 # GSVA、TF、PROGENy、相关性
+│   ├── 03_enrichment.R               # ORA、GSEA
+│   ├── 04_activity.R                 # GSVA、TF、PROGENy
 │   ├── 05_network.R                  # PPI、module、hub、module enrichment
-│   ├── 06_motif.R                    # promoter motif / peak-aware motif
-│   └── 07_exploratory.R              # 指定基因、自定义基因集、适用探索
+│   ├── 06_motif.R                    # promoter motif；peak motif 仍受硬门禁
+│   ├── 07_exploratory.R              # boxplot、自定义基因集、Pathview 等
+│   └── snakemake/                    # 单模块执行与最终封存
 ├── projects/
-│   ├── _template/                    # 唯一空白模板；故意未确认
+│   ├── _template/                    # 唯一空白模板，故意不可直接运行
 │   └── <project_id>/
-│       ├── project.yml               # 来源、设计、模块、格式和资源
-│       ├── samples.tsv               # 样本、协变量、排除及理由
+│       ├── project.yml               # 来源、设计、参数、模块、资源、导出
+│       ├── samples.tsv               # 样本、组、批次、配对、排除及理由
 │       ├── contrasts.tsv             # numerator 相对 denominator 的方向
-│       ├── qc_approval.yml            # 用户 QC/排除确认
-│       ├── input/                    # counts 校验副本与上游配置
-│       ├── results/                  # 唯一当前正式结果
-│       │   └── index.html            # 唯一浏览总入口
+│       ├── qc_approval.yml            # 用户 QC/排除审批
+│       ├── input/                    # counts 校验副本及来源清单
+│       ├── results/                  # 唯一当前正式结果；index.html 为入口
 │       └── work/                     # staging、cache、logs、history
 ├── resources/
 │   ├── registry.yml                  # release/source/hash/license 元数据
-│   ├── sources/                      # 唯一允许联网的同步声明
+│   ├── sources/                      # 获批联网同步声明
 │   └── data/                         # 本地冻结资源，不提交 Git
-├── tests/                            # 通用结构、禁令、数值和渲染测试
-└── internal/                         # 不放新的科学决策
-    ├── cli/                          # init/doctor/check/analyze/clean
-    ├── lib/                          # schema、哈希、manifest、控制逻辑
-    ├── schemas/                      # 项目和资源 schema
-    ├── reporting/                    # HTML、发布和视觉 QA
-    ├── audit/                        # 可选历史结果盘点/比较工具
-    ├── motif/                        # MEME/STREME 执行包装
-    ├── upstream/
-    │   ├── adapter.py                # 显式上游服务器适配器
-    │   └── omics-pipelines/          # 固定提交 Git submodule
-    ├── vendor/r-apear/               # 固定源码、Pixi 构建依赖
-    ├── utilities/                    # 可审计维护工具
-    └── windows/                      # Windows→WSL 导入入口
+├── tests/                            # 结构、禁令、数值、回归、渲染测试
+└── internal/                         # CLI、schema、发布、审计、上游适配基础设施
 ```
 
-仓库根目录不得新增 `runs/`、`analysis/`、`scripts/`、`R/` 等平级实现。所有项目
-内容只能进入 `projects/<project_id>/`；共享资源只能进入 `resources/`。
+根目录不得新增 `runs/`、`analysis/`、`scripts/`、`R/` 等平级实现。项目内容只能进入 `projects/<project_id>/`；共享资源只能进入 `resources/`。
 
-## 3. 收到 counts 后的强制流程
+## 3. 收到 counts 后必须先问的问题
 
-### 3.1 先问，不运行
+在导入或计算前逐项确认并记录：
 
-先确认项目 ID；同名项目不得覆盖。然后逐项询问并记录：
+- 项目 ID；是否会与现有项目同名。
+- counts 来自 featureCounts、STAR、Salmon/tximport、其他还是未知。
+- gene-level 还是 transcript-level；gene ID 类型。
+- 物种、assembly、annotation release。
+- 是否做过 TPM/FPKM/CPM/RPKM、批次校正或其他归一化。
+- 是否包含技术重复；若包含，是否已在上游按相同生物样本求和。
+- 上游样本/基因过滤、strandedness 和已知限制。
+- 样本到组、批次、配对和协变量的映射；任何排除及理由。
+- 设计公式、每个因子的参考水平。
+- 每个 contrast 的 factor、numerator、denominator 和方向解释。
+- 是否有 FASTQ；本次是否需要服务器上游分析。
+- 11 个细分模块的 enabled / not_applicable / skipped_by_user 状态及理由。
 
-- counts 来自 featureCounts、STAR、Salmon/tximport、其他还是未知；
-- gene-level 还是 transcript-level；
-- 物种、assembly、annotation release 和 gene ID 类型；
-- 是否做过 TPM/FPKM/CPM/RPKM、批次校正或其他归一化；
-- 技术重复、上游样本/基因过滤、strandedness；
-- 样本到组/批次/配对/协变量的映射；
-- 设计公式、参考水平、每个 comparison 的 numerator/denominator；
-- 是否有 FASTQ 等上游数据，是否本次需要上游；
-- 下面列出的每一个分析模块是否启用、非适用或由用户跳过。
+`unknown` 可以作为来源限制保留，但正式 DESeq2 前 `normalization` 必须明确为 `raw_counts`。transcript counts 必须先确认 gene-level 汇总方法。整数值只能证明格式可能兼容，不能证明其一定是 raw counts。
 
-`unknown` 可以记录，但必须在报告中暴露限制。明确为标准化表达值时禁止 DESeq2；
-transcript counts 必须先确认 tximport/聚合策略。
+## 4. 每次运行必须重新确认的决策
 
-### 3.2 只读检查和导入
+Agent 必须执行：
 
-检查格式、分隔符、行列数、样本列、ID、重复 ID、NA/Inf、负值、小数、library
-size 和零值比例。整数不等于已证明的 raw counts。确认后用 `import-counts` 复制到
-项目 `input/` 并校验哈希；不得修改源文件。
-
-### 3.3 设计与 QC 双重确认
-
-生成 `project.yml`、`samples.tsv`、`contrasts.tsv` 草案。任何模块或上游决定为
-`confirmed: false` 时必须停止。先做预分析 QC；样本排除只能由用户确认，并写入
-`samples.tsv` 与 `qc_approval.yml`，不得因 PCA 离群而自动删除。
-
-### 3.4 每次运行重新确认模块
-
-必须把 11 个细分决定逐项展示给用户：
-
-- QC；差异表达；ORA/GSEA 富集；GSVA/TF/PROGENy 调控；PPI 网络；
-- promoter motif；peak-aware motif；自定义基因集；Pathview；个性化分析；WGCNA。
-
-得到本次确认后运行 `pixi run modules -- --project ...`，并把其完整
-`confirmation_token` 原样交给 `analyze --confirm-modules`。交互/非交互、Python/R
-入口都不得绕过这一条件。
-
-### 3.5 staging、QA、发布
-
-正式数值分析只计算一次：一个 DESeq2 共享模型供所有 contrasts 使用；GSEA 使用
-完整 Wald 排序；报告详细度和导出格式不得触发统计重算。结果先进入 staging。
-启用模块失败必须 `failed_explicit`，非适用或跳过必须有理由。
-
-发布前必须通过：配置/资源/输入哈希、单元与集成测试、PDF 渲染、HTML 链接、模块
-状态和 manifest。若用户提供旧结果，还要生成 `legacy_analysis_matrix.tsv`、
-`legacy_output_inventory.tsv`；`missing` 必须阻止发布。旧正式结果移入 history，
-不得覆盖或删除。
-
-## 4. 模块、报告与导出是独立维度
-
-```yaml
-analysis:
-  modules: {}       # 是否计算
-report:
-  detail: comprehensive
-export:
-  figures: all      # 发布图件范围
-  formats: [pdf]    # 文件格式
+```bash
+pixi run plan -- --project projects/<project_id>
 ```
 
-报告精简不代表分析被跳过。默认只生成 PDF；只有用户明确说需要 PNG 时，才允许加入
-`png`。不得默认生成 SVG。火山图固定为用户选定的经典单面板样式；风格调整不能改变
-点集合、阈值、方向、标签选择规则或统计值。
+并把输出中的每组决策完整展示给用户。至少包括：
 
-## 5. 可选上游的硬边界
+| 决策组 | 必须询问/展示的内容 |
+|---|---|
+| 输入与设计 | 来源、物种/assembly、样本、排除、设计、reference、所有 contrasts、上游选择 |
+| 过滤与 DE | `min_count`、`min_samples`、screening 或 LFC-threshold test、每个 padj/abs-LFC profile、主 profile |
+| DE 图形 | 火山图标签数、热图每方向基因数；boxplot 基因在 exploratory 中单独列出 |
+| ORA/GSEA | ORA 使用哪个 DEG profile、ORA/GSEA 数据库、ORA FDR、GSEA 报告 FDR、set size、冗余阈值、曲线数 |
+| 调控 | GSVA 集合、TF 网络、目标 TF、关注通路、最小 targets、TF-GSEA rank/FDR/曲线、报告数量 |
+| PPI | DEG profile、最大输入基因数、STRING confidence、module FDR、标签数量、固定布局 seed |
+| motif | DEG profile、promoter 窗口、最少 foreground、匹配背景、STREME 宽度/P 阈值、展示 motif 数；是否有 peaks |
+| 探索 | boxplot 目标基因、自定义基因集及 rank、Pathview ID、个性化任务、WGCNA 适用性 |
+| 报告与导出 | 实际计算模块、报告深度、发布图件范围、格式；默认仅 PDF |
 
-每个新项目必须先问“是否有上游 FASTQ，以及本次是否需要上游分析”。默认模板的
-`upstream.status: unconfirmed` 会阻止分析，不能静默当作 disabled。
+确认后同时使用 `plan` 输出的两个令牌：
 
-明确不需要时记录 `status: disabled, confirmed: true`。明确需要时才可改为 enabled，
-准备项目内的 `input/upstream/` 配置，并再次运行 `upstream-plan` 展示 provider、固定
-提交、执行主机、目标和确认令牌。
+```bash
+pixi run analyze -- --project projects/<project_id> \
+  --confirm-modules '<module_confirmation_token>' \
+  --confirm-plan '<plan_confirmation_token>'
+```
 
-- 上游来源固定为 `xuzhougeng/omics-pipelines` 提交
-  `ce4e2ec88da6663a32b7099c5850e1a51ad66952`。
-- 仅调用 FASTQ QC、fastp、STAR、BAM/coverage 依赖和 raw gene-count merge。
-- 目标必须是 `results/04-quant/counts.tsv`；不得调用该上游的 DESeq2 或 enrichment。
-- 默认 `execution_host: server`、`allow_wsl: false`。本机 WSL 不建 index、不跑 STAR。
-- STAR index 必须由服务器管理员预先提供；适配器不创建、不下载、不猜测版本。
-- 上游输出仍须通过标准 counts 导入、来源确认、QC 和下游模块确认。
-- submodule 是第三方边界，不得直接改其源码。更新提交必须用户批准、重新审计并更新测试。
+`plan_confirmation_token` 绑定 `project.yml`、`samples.tsv`、`contrasts.tsv`、`qc_approval.yml` 和 `input/source_manifest.yml`。任一输入或参数变化后旧令牌自动失效。Agent 不得替用户生成“同意”；令牌只能在当前计划已被用户确认后提交。
 
-## 6. 软件、资源与计算
+## 5. 哪些方法是科学锁定项，不作为任意选择
 
-软件由一个根 Pixi workspace 和一个锁文件管理。锁内可以有兼容的 default/motif
-环境，但用户没有第二套安装流程。大型数据库、FASTA/GTF、MSigDB、JASPAR、STRING、
-OmniPath/CollecTRI/PROGENy、KEGG/Pathview、ChEA/ENCODE/GTRD 和自定义基因集属于
-资源层，每个资源必须记录 ID、物种、assembly、release、来源、时间、SHA256 和许可。
+- DESeq2 只使用 raw integer counts；批次/协变量进入设计公式，不在校正表达矩阵上检验。
+- QC PCA 使用 blind VST；模型相关表达图使用 `blind = FALSE` 的 VST。
+- 一个项目只拟合一个共享 DESeq2 模型，所有已确认 contrasts 复用该模型。
+- 展示效应量使用 ashr 收缩 LFC；Wald P 值和 BH padj 不因收缩而替换。
+- ORA 背景固定为“通过过滤且成功映射到相应 ID 空间的全部 tested genes”。Up/Down 分开。
+- GSEA 使用完整有限排序，不用 DEG 子集；常规通用项目默认推荐 Wald statistic。
+- 完整结果表永远保留；top-N、冗余约简和图件数量只是报告层。
+- 任何样本排除只能由用户审批，不能依据 PCA 自动删除。
+- 随机布局和 permutation 使用配置中记录的固定 seed。
 
-普通任务最多 3 worker；DESeq2 共享模型单任务；BLAS/OMP/data.table 每 worker 1
-线程。运行前显示 CPU、内存与磁盘估计。大表优先压缩 TSV/Parquet。
+若用户要改变这些方法，Agent 必须先说明影响，建立新的方法版本和回归测试，不能把变更混进一次普通运行。
 
-## 7. 结果与科学解释
+## 6. 当前硬门禁与支持边界
 
-结果按 7 个清晰模块组织，共享 QC 和模型只出现一次，多 comparison 结果进入
-`Comparisons/<contrast_id>/`。表放 Tables，图放 Figures；没有显著结果仍保存完整表并
-明确说明，不生成空图冒充完成。
+- `motif_peaks`：当前没有通过通用验证的 peak-aware executor；启用会失败，不能伪装完成。
+- `wgcna`：当前没有通过通用验证的执行器；启用会失败。样本不足时应标为 not_applicable。
+- `personalized`：必须先提供单独审核的、只读标准产物的执行器，否则启用会失败。
+- 通用 `Pathview`：当前通用计算器未完成；历史迁移项目只能复制并校验冻结旧图。新项目启用会失败。
+- enrichment、regulation、network 当前仅对已冻结的人类资源完成验证；非人项目启用这些模块会失败，而不是静默套用人类数据库。
 
-ORA 依赖阈值及明确 universe；GSEA 使用完整排序，两者不可互相替代。WGCNA、SVA、
-细胞比例等仅在适用条件满足且用户确认后运行。图形不得隐藏异常值、调换上下调方向、
-改变坐标语义或重算既有布局。
+这份边界必须在计划阶段向用户说明。只有真正实现并通过测试后，才能删除相应门禁。
 
-## 8. Agent 交付时必须报告
+## 7. 历史迁移项目
 
-- 唯一正式结果/或 staging 路径；
-- 本次用户确认的模块清单和上游决定；
-- 启用、非适用、失败、用户跳过状态；
-- tests、PDF 实际渲染、资源与哈希 QA；
-- 主要 Figures/Tables/HTML 入口和已知限制；
-- 发生的任何清理及其可恢复性。
+当 `migration.requires_legacy_parity: true` 时：
+
+1. 旧结果是不可退化的回归基线；新增分析不能替换旧能力。
+2. 先写 staging，不覆盖 `results/`。
+3. 发布前生成 `legacy_analysis_matrix.tsv`、逐文件 `legacy_output_inventory.tsv` 和数值回归报告。
+4. 任一旧输出为 `missing`，或 DE、ORA/GSEA、TF/GSVA/PROGENy、PPI、自定义分析回归失败，均阻止发布。
+5. 不同 gene-set release、ID、universe、rank、min/max size、seed 或算法都属于统计变更，不是可视化优化。
+6. motif 是新增探索模块，不得反向改写旧结果的生物学含义。
+
+## 8. QC、staging 与发布
+
+1. counts 导入后保存 `source_manifest.yml` 与 SHA256。
+2. 只读预检格式、行列、样本列、重复 ID、NA/Inf、负值、小数、library size 和零值比例。
+3. 输入/设计/过滤和 QC 模块确认后，使用当前 plan token 执行 `qc-preview`。该阶段只生成 QC，状态必须为 `awaiting_user_qc_approval`，不能发布。
+4. 用户查看全部 QC/PCA 后，审批排除并更新 `samples.tsv` 与 `qc_approval.yml`；随后必须重新生成 formal plan token。
+5. 正式结果先进入 `work/staging/<run_id>/`。
+6. 启用模块失败必须为 `failed_explicit`；无显著结果也保留完整表和明确状态，不能制造空图。
+7. 发布前验证配置/资源/输入哈希、禁令、单元与集成测试、PDF 签名和实际渲染、HTML 链接、模块状态及 manifest。
+8. 已发布结果移入 history 后才可发布新结果；不得覆盖或删除历史。
+
+## 9. 图件与报告
+
+- 默认只输出可编辑字体的矢量 PDF；只有用户明确要求时才增加 PNG。
+- 火山图保持用户选定的经典单面板风格，完整显示所有点、阈值线和固定规则标签。
+- 不隐藏极端值、异常值或不符合预期的结果，不调换上下调方向。
+- 热图必须记录输入矩阵、缩放方向、距离、聚类方法和最终顺序。
+- ORA 与 GSEA 不得互相替代；GeneRatio 不是 effect size，NES 的正负必须跟 contrast 一致。
+- 每张图应有对应绘图数据或可追溯的标准输入。
+
+## 10. Agent 交付时必须报告
+
+- 唯一 staging 或正式结果路径。
+- 本次用户确认的输入、设计、参数、模块和上游选择。
+- enabled、not_applicable、skipped_by_user、failed_explicit 状态。
+- tests、forbidden check、schema、资源/哈希、PDF/HTML QA 结果。
+- 主要 Figures、Tables、HTML 入口和已知限制。
+- 任何科学方法变化及对应回归结果。
+- 任何清理操作、目标范围和可恢复性。

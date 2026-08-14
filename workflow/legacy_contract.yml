@@ -1,0 +1,68 @@
+schema_version: 1
+baseline_project: FKBP1A-PAI
+principle: "Snakemake may change scheduling only; scientific methods and meanings remain legacy-compatible."
+
+global:
+  formal_seed: 123
+  p_adjust_method: BH
+  expression_input: raw_integer_counts
+  primary_profile: {padj: 0.05, abs_lfc: 1.0}
+  exploratory_profile: {padj: 0.05, abs_lfc: 0.5}
+  figure_default: pdf
+
+modules:
+  01_QC:
+    legacy_scripts: [01_deseq2_qc_diff.R]
+    invariants: [sample_set, exclusion_decision, count_filter, VST_coordinates, clustering_inputs]
+  02_Differential:
+    legacy_scripts: [01_deseq2_qc_diff.R, 02_prepare_heatmap_matrix.R, 03_plot_volcano_ma_heatmap.R, 12_gene_boxplots.R]
+    engine: DESeq2
+    shrinkage: ashr
+    ranking_statistic: DESeq2_Wald_statistic
+    invariants: [design_formula, factor_levels, contrast_direction, tested_genes, raw_MA, shrunk_MA, volcano_classification]
+  03_Enrichment:
+    legacy_scripts: [04_ora_enrichment.R, 04b_ora_sankey_bubble.R, 05_gsea_core.R, 07_gsea_pathway_heatmap.R, 08_kegg_pathview_maps.R]
+    ora:
+      engine: clusterProfiler_compareCluster_enricher
+      id_space: ENTREZID
+      universe: all_tested_mapped_genes
+      clusters: [Up, Down, All]
+      databases: [GO_BP, GO_CC, GO_MF, KEGG, Hallmark]
+    gsea:
+      engine: clusterProfiler_GSEA
+      rank: DESeq2_Wald_statistic
+      seed: 123
+      databases: [Reactome, Hallmark, KEGG, GO_BP]
+      parallelism: serial
+    invariants: [all_full_tables, NES, enrichmentScore, pvalue, p.adjust, qvalue, core_enrichment]
+  04_Regulation:
+    legacy_scripts: [05_gsea_core.R, 06_gsea_tf_databases.R, 10_tf_activity_decoupler.R, 11_gsva_tf_correlation.R, 13_progeny_decoupler.R]
+    tf_database_gsea:
+      GTRD: {engine: clusterProfiler_GSEA, rank: DESeq2_Wald_statistic, seed: 123}
+      ChEA_ENCODE: {engine: clusterProfiler_GSEA, rank: ashr_shrunken_log2FC, seed: 123}
+    tf_activity: {engine: decoupleR_run_ulm, minsize: 5}
+    gsva: {engine: GSVA_gsvaParam, kcdf: Gaussian}
+    progeny: {engine: decoupleR_run_mlm, top_targets: 500}
+  05_Network:
+    legacy_scripts: [09_ppi_string_network.R]
+    engine: STRING_igraph
+    string_score_threshold: 400
+    default_top_degs: 200
+    invariants: [node_set, edge_set, degree, hub_ranking, module_outputs, module_enrichment]
+  06_Motif:
+    legacy_scripts: []
+    extension: true
+    engines: [STREME, AME]
+    invariants: [separate_Up_Down, matched_nonDE_background, frozen_FASTA_GTF_JASPAR, exploratory_language]
+  07_Exploratory:
+    legacy_scripts: [14_custom_gene_sets.R]
+    custom_gsea: {engine: clusterProfiler_GSEA, rank: shrunken_log2FC, min_size: 3, max_size: 500, seed: 123}
+    invariants: [custom_heatmaps, custom_curves, specified_gene_boxplots, Pathview]
+
+upstream:
+  provider: xuzhougeng/omics-pipelines
+  pinned_commit: ce4e2ec88da6663a32b7099c5850e1a51ad66952
+  default: disabled
+  requires_explicit_confirmation: true
+  allowed_target: results/04-quant/counts.tsv
+  forbidden_targets: [DESeq2, enrichment]

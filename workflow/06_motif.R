@@ -34,6 +34,19 @@ run_motif <- function(context) {
   if (!all(vapply(required, function(x) isTRUE(matching[[x]]), logical(1)))) {
     stop("Promoter motif requires confirmed matching on GC, promoter length and base expression")
   }
+  motif_config <- context$config$motif %||% list()
+  profiles <- threshold_profiles(context$config)
+  motif_profile <- as.character(motif_config$deg_profile %||% names(profiles)[[1L]])
+  if (!motif_profile %in% names(profiles)) stop("Unknown motif.deg_profile: ", motif_profile)
+  direction_column <- paste0("direction_", motif_profile)
+  promoter_upstream <- as.integer(motif_config$promoter_upstream_bp %||% 1000L)
+  promoter_downstream <- as.integer(motif_config$promoter_downstream_bp %||% 100L)
+  minimum_foreground <- as.integer(motif_config$minimum_foreground_genes %||% 10L)
+  streme_min_width <- as.integer(motif_config$streme_min_width %||% 6L)
+  streme_max_width <- as.integer(motif_config$streme_max_width %||% 15L)
+  streme_pvalue <- as.numeric(motif_config$streme_pvalue %||% 0.05)
+  known_motif_display <- as.integer(motif_config$known_motif_display %||% 15L)
+  if (streme_min_width > streme_max_width) stop("motif.streme_min_width cannot exceed streme_max_width")
   fasta <- resource_path(context, context$config$resources$motif_fasta)
   gtf <- resource_path(context, context$config$resources$motif_gtf)
   motif_database <- resource_path(context, context$config$resources$motif_database)
@@ -64,8 +77,8 @@ run_motif <- function(context) {
     if (length(id) < 2L) return(NULL)
     id <- sub("\\.[0-9]+$", "", id[[2L]])
     start <- as.integer(x[[2L]]); end <- as.integer(x[[3L]])
-    if (x[[4L]] == "+") c(x[[1L]], max(0L, start - 1001L), start + 100L, id, ".", x[[4L]])
-    else c(x[[1L]], max(0L, end - 100L), end + 1001L, id, ".", x[[4L]])
+    if (x[[4L]] == "+") c(x[[1L]], max(0L, start - promoter_upstream - 1L), start + promoter_downstream, id, ".", x[[4L]])
+    else c(x[[1L]], max(0L, end - promoter_downstream), end + promoter_upstream + 1L, id, ".", x[[4L]])
   }))
   promoters <- as.data.frame(promoters, stringsAsFactors = FALSE)
   names(promoters) <- c("chrom", "start", "end", "gene_id", "score", "strand")
@@ -102,15 +115,16 @@ run_motif <- function(context) {
   covariates <- fasta_gc(all_fasta)
   base_mean <- do.call(rbind, lapply(names(context$state$differential), function(id) {
     x <- context$state$differential[[id]]$result
-    data.frame(contrast_id = id, gene_id = x$gene_id, baseMean = x$baseMean, direction = x$direction)
+    data.frame(contrast_id = id, gene_id = x$gene_id, baseMean = x$baseMean,
+               direction = x[[direction_column]])
   }))
   summaries <- list(); known_results <- list()
   for (contrast_id in names(context$state$differential)) {
     de <- context$state$differential[[contrast_id]]$result
-    background_candidates <- merge(de[de$direction == "Not_significant", c("gene_id", "baseMean")], covariates, by = "gene_id")
+    background_candidates <- merge(de[de[[direction_column]] == "Not_significant", c("gene_id", "baseMean")], covariates, by = "gene_id")
     for (direction in c("Up", "Down")) {
-      foreground <- merge(de[de$direction == direction, c("gene_id", "baseMean")], covariates, by = "gene_id")
-      if (nrow(foreground) < 10L) {
+      foreground <- merge(de[de[[direction_column]] == direction, c("gene_id", "baseMean")], covariates, by = "gene_id")
+      if (nrow(foreground) < minimum_foreground) {
         summaries[[paste(contrast_id, direction)]] <- data.frame(contrast_id, direction, status = "not_applicable_too_few_foreground",
                                                                   foreground = nrow(foreground), background = 0L)
         next
@@ -149,7 +163,8 @@ run_motif <- function(context) {
       out <- file.path(root, stem); dir.create(out, recursive = TRUE, showWarnings = FALSE)
       streme_log <- file.path(out, "STREME.log")
       streme <- system2(executable[["streme"]], c("--p", fg_fasta, "--n", bg_fasta, "--oc", file.path(out, "STREME"),
-                                                   "--dna", "--minw", "6", "--maxw", "15", "--thresh", "0.05"),
+                                                   "--dna", "--minw", streme_min_width, "--maxw", streme_max_width,
+                                                   "--thresh", streme_pvalue),
                         stdout = streme_log, stderr = streme_log)
       if (streme != 0L) stop("STREME failed for ", stem, ": ", paste(tail(readLines(streme_log, warn = FALSE), 6L), collapse = " | "))
       ame_path <- file.path(out, "AME_JASPAR.tsv")
@@ -162,7 +177,7 @@ run_motif <- function(context) {
         known_results[[stem]] <- ame_table
         p_column <- intersect(c("adj_p-value", "p-value"), names(ame_table))[[1L]]
         name_column <- intersect(c("motif_alt_ID", "motif_ID"), names(ame_table))[[1L]]
-        top <- head(ame_table[order(ame_table[[p_column]]), ], 15L)
+        top <- head(ame_table[order(ame_table[[p_column]]), ], known_motif_display)
         top$motif <- factor(top[[name_column]], levels = rev(top[[name_column]]))
         top$minus_log10_p <- -log10(pmax(top[[p_column]], .Machine$double.xmin))
         plot <- ggplot2::ggplot(top, ggplot2::aes(minus_log10_p, motif)) +

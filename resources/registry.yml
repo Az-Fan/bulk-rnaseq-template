@@ -1,23 +1,25 @@
 schema_version: 1
 resources:
-- resource_id: legacy_do_primary_hdo_result
+- resource_id: fosl1_kd_legacy_annotation_map_v1
   species: human
-  assembly: not_applicable
-  release: historical v3 frozen result
-  source_url: historical-project://FKBP1A-PAI/Primary/HDO
-  downloaded_at: '2026-08-12T00:00:00+00:00'
-  sha256: 47363eec1d7573515030e29aa47e8f0632c8a90eea2c154c43f97a1f80ec7d6e
-  license_or_access_note: Locally generated analysis output; original HDO annotation release was not recorded.
-  local_path: data/FKBP1A-PAI/cache/legacy_do/Primary_padj0.05_LFC1.0_DO_filtered_enrichment.csv
-- resource_id: legacy_do_exploratory_hdo_result
+  assembly: hg38
+  release: FOSL1_KD frozen legacy org.Hs.eg.db mapping
+  source_url: historical-project://FOSL1_KD/DEG_results_annotated.csv
+  downloaded_at: '2026-08-14T00:00:00+08:00'
+  sha256: 9f43af3bf1cb206d8d89f4404574d957d7b21150ca7c650ab8b3fd596f548874
+  license_or_access_note: Deterministically extracted from the user's read-only FOSL1_KD legacy DE table for numerical migration regression.
+  local_path: data/FOSL1-KD/cache/fosl1_kd_legacy_annotation_map_v1.rds
+- resource_id: fkbp1a_pai_legacy_annotation_map
   species: human
-  assembly: not_applicable
-  release: historical v3 frozen result
-  source_url: historical-project://FKBP1A-PAI/Exploratory/HDO
-  downloaded_at: '2026-08-12T00:00:00+00:00'
-  sha256: 47363eec1d7573515030e29aa47e8f0632c8a90eea2c154c43f97a1f80ec7d6e
-  license_or_access_note: Locally generated analysis output; original HDO annotation release was not recorded.
-  local_path: data/FKBP1A-PAI/cache/legacy_do/Exploratory_padj0.05_LFC0.5_DO_filtered_enrichment.csv
+  assembly: hg38
+  release: FKBP1A-PAI frozen legacy org.Hs.eg.db mapping
+  source_url: historical-project://FKBP1A-PAI/DEG_results_annotated.csv
+  downloaded_at: '2026-08-13T11:42:00+00:00'
+  sha256: 48e8d6ff9c3078e33ddfafb213b8567b30900a466c6ed9a206498f14ff2f8402
+  license_or_access_note: >-
+    Deterministically extracted gene_id, SYMBOL and ENTREZID mapping from the
+    user's frozen legacy DE table for numerical migration regression.
+  local_path: data/FKBP1A-PAI/cache/fkbp1a_pai_legacy_annotation_map.rds
 - resource_id: NETWORK_REQUIREMENTS.txt
   species: human
   assembly: hg38
@@ -145,6 +147,26 @@ resources:
   license_or_access_note: JASPAR is open access; cite the JASPAR 2026 release and
     observe upstream terms.
   local_path: data/shared/hg38-motif/JASPAR2026_CORE_vertebrates_non-redundant_pfms_meme.txt
+- resource_id: legacy_do_exploratory_hdo_result
+  species: human
+  assembly: not_applicable
+  release: historical v3 frozen result
+  source_url: historical-project://FKBP1A-PAI/Exploratory/HDO
+  downloaded_at: '2026-08-12T00:00:00+00:00'
+  sha256: 47363eec1d7573515030e29aa47e8f0632c8a90eea2c154c43f97a1f80ec7d6e
+  license_or_access_note: Locally generated analysis output; original HDO annotation
+    release was not recorded.
+  local_path: data/FKBP1A-PAI/cache/legacy_do/Exploratory_padj0.05_LFC0.5_DO_filtered_enrichment.csv
+- resource_id: legacy_do_primary_hdo_result
+  species: human
+  assembly: not_applicable
+  release: historical v3 frozen result
+  source_url: historical-project://FKBP1A-PAI/Primary/HDO
+  downloaded_at: '2026-08-12T00:00:00+00:00'
+  sha256: 47363eec1d7573515030e29aa47e8f0632c8a90eea2c154c43f97a1f80ec7d6e
+  license_or_access_note: Locally generated analysis output; original HDO annotation
+    release was not recorded.
+  local_path: data/FKBP1A-PAI/cache/legacy_do/Primary_padj0.05_LFC1.0_DO_filtered_enrichment.csv
 - resource_id: msigdb.2025.1.Hs.rds
   species: human
   assembly: hg38
@@ -165,6 +187,28 @@ resources:
   license_or_access_note: Imported from authorized historical project cache; MSigDB
     access terms apply
   local_path: data/FKBP1A-PAI/msigdb/h.all.v2025.1.Hs.symbols.gmt
+- resource_id: msigdbr_7.5.1_source
+  species: multi_species
+  assembly: not_applicable
+  release: msigdbr 7.5.1 / MSigDB 7.5.1
+  source_url: https://cran.r-project.org/src/contrib/Archive/msigdbr/msigdbr_7.5.1.tar.gz
+  downloaded_at: '2026-08-13T10:55:06.177409+00:00'
+  sha256: dc30487bdf3594425ae9faec1ca0d7d0cd7278f4f177689133f92880e74acaca
+  license_or_access_note: Archived CRAN source used only as a frozen data resource.
+    MSigDB gene-set data remain subject to the Broad Institute MSigDB terms; this
+    archive is not installed as an R package during analysis.
+  local_path: data/shared/msigdb-7.5.1/msigdbr_7.5.1.tar.gz
+- resource_id: msigdb_7.5.1_human_gene_sets
+  species: human
+  assembly: not_applicable
+  release: MSigDB 7.5.1 frozen human gene sets
+  source_url: derived-resource://msigdbr_7.5.1_source/R/sysdata.rda
+  downloaded_at: '2026-08-13T11:10:00+00:00'
+  sha256: 899ea6a32175f6d70665bf47784a42f221a1a27baf4cf0bd26f73cd34d781f96
+  license_or_access_note: >-
+    Deterministically extracted from the registered archived msigdbr 7.5.1
+    source without installing it. MSigDB access and redistribution terms apply.
+  local_path: data/shared/msigdb-7.5.1/msigdb_7.5.1_human_gene_sets.rds
 - resource_id: tf_databases_ENCODE_TF_ChIP-seq_2015.txt
   species: human
   assembly: hg38

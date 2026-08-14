@@ -11,14 +11,14 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from internal.lib.core import module_confirmation_string, validate_project
+from internal.lib.core import module_confirmation_string, plan_confirmation_token, validate_project
 
 
 ROOT = Path(__file__).resolve().parents[1]
 RSCRIPT = ROOT / ".pixi/envs/default/bin/Rscript"
 
 
-def test_public_orchestrator_does_not_bypass_modules():
+def test_public_orchestrators_do_not_bypass_modules():
     text = (ROOT / "workflow/run.R").read_text(encoding="utf-8")
     assert "internal/engines" not in text
     assert "system2(" not in text
@@ -27,6 +27,47 @@ def test_public_orchestrator_does_not_bypass_modules():
         "run_network", "run_motif", "run_exploratory",
     ):
         assert function in text
+    snakefile = (ROOT / "workflow/Snakefile").read_text(encoding="utf-8")
+    for module in ("01_QC", "02_Differential", "03_Enrichment", "04_Regulation", "05_Network", "06_Motif", "07_Exploratory"):
+        assert module in snakefile
+    assert "run_module.R" in snakefile
+    assert "finalize.R" in snakefile
+    cli = (ROOT / "internal/cli/pipeline.py").read_text(encoding="utf-8")
+    assert '.pixi/envs/default/bin/snakemake' in cli
+    assert 'env["PATH"] = str(locked_bin)' in cli
+    assert '"--resume"' in cli
+
+
+def test_legacy_inventory_is_file_level_and_complete_for_fixture(tmp_path):
+    from internal.lib.core import inventory_legacy_outputs
+    old = tmp_path / "old"; new = tmp_path / "new"; audit = tmp_path / "audit"
+    (old / "02_Differential/Figures").mkdir(parents=True)
+    (new / "02_Differential/Figures").mkdir(parents=True)
+    (old / "02_Differential/Figures/Volcano.png").write_bytes(b"legacy")
+    (new / "02_Differential/Figures/Volcano.pdf").write_bytes(b"%PDF fixture")
+    _, inventory, summary = inventory_legacy_outputs(old, new, audit)
+    rows = pd.read_csv(inventory, sep="\t")
+    assert len(rows) == 1
+    assert rows.loc[0, "legacy_file"] == "02_Differential/Figures/Volcano.png"
+    assert len(rows.loc[0, "legacy_sha256"]) == 64
+    assert rows.loc[0, "status"] == "preserved"
+    assert summary["passed"] and summary["missing_files"] == 0
+
+
+def test_counts_can_be_imported_before_project_is_fully_confirmed(tmp_path):
+    from internal.lib.core import import_counts
+    project = tmp_path / "Unconfirmed-Import"
+    project.mkdir()
+    config = yaml.safe_load((ROOT / "projects/_template/project.yml").read_text(encoding="utf-8"))
+    config["project_id"] = project.name
+    (project / "project.yml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    (project / "samples.tsv").write_text("sample\tcanonical_sample\tgroup\texcluded\texclusion_reason\nS1\tS1\tControl\tfalse\t\n", encoding="utf-8")
+    source = tmp_path / "counts.tsv"
+    source.write_text("gene_id\tS1\nENSG00000000001\t3\n", encoding="utf-8")
+    destination, manifest = import_counts(source, project, "counts.tsv")
+    assert destination.is_file()
+    assert manifest["genes"] == 1 and manifest["samples"] == 1
+    assert not config["counts_provenance"]["confirmed"]
 
 
 def test_public_modules_are_free_of_project_and_two_group_hardcoding():
@@ -81,7 +122,8 @@ def build_project(project: Path) -> Path:
         "schema_version": 4, "project_id": project.name, "species": "human", "assembly": "hg38",
         "counts_provenance": {
             "source_method": "featureCounts", "feature_level": "gene", "normalization": "raw_counts",
-            "technical_replicates": "none", "upstream_filtering": "none", "strandedness": "unknown",
+            "technical_replicates": "none", "technical_replicate_handling": "not_applicable",
+            "upstream_filtering": "none", "strandedness": "unknown",
             "genome_annotation": "test-fixture", "confirmed": True,
         },
         "design": {"formula": "~ batch + group", "factor_levels": {"batch": ["B1", "B2"], "group": ["Reference", "DoseLow", "DoseHigh"]}, "display_factor": "group", "confirmed": True},
@@ -92,8 +134,14 @@ def build_project(project: Path) -> Path:
             "commit": "ce4e2ec88da6663a32b7099c5850e1a51ad66952", "workflow": "rnaseq",
             "execution_host": "server", "allow_wsl": False, "target": "results/04-quant/counts.tsv",
         },
+        "decision_confirmation": {
+            "input_design_filtering": True, "differential": True, "enrichment": True,
+            "regulation": True, "network": True, "motif": True,
+            "exploratory": True, "reporting_export": True,
+        },
         "filtering": {"min_count": 10, "min_samples": 3},
         "thresholds": {"mode": "screening", "padj": 0.05, "abs_lfc": 1.0},
+        "differential": {"primary_profile": "Primary", "volcano_label_count": 15, "heatmap_genes_per_direction": 25},
         "analysis": {"random_seed": 104729, "modules": {
             "qc": enabled, "differential": enabled,
             "enrichment": not_applicable("No frozen gene-set fixture"),
@@ -120,6 +168,7 @@ def test_generic_batch_design_multiple_contrasts_runs_to_complete(tmp_path):
     cfg = validate_project(project / "project.yml")
     env = os.environ.copy()
     env["BULK_RNASEQ_MODULE_CONFIRMATION"] = module_confirmation_string(cfg)
+    env["BULK_RNASEQ_PLAN_CONFIRMATION"] = plan_confirmation_token(project, cfg)
     completed = subprocess.run(
         [str(RSCRIPT), str(ROOT / "workflow/run.R"), str(project), str(run)],
         cwd=ROOT, env=env, text=True, capture_output=True, timeout=180,
@@ -137,7 +186,44 @@ def test_generic_batch_design_multiple_contrasts_runs_to_complete(tmp_path):
     assert (run / "Comparisons/High_vs_Reference/02_Differential/Figures/Volcano.pdf").is_file()
     assert not list(run.rglob("*.png"))
     assert not list(run.rglob("*.svg"))
-    assert all(item["status"] in {"complete", "not_applicable", "skipped_by_user"} for item in manifest["modules"].values())
+    assert all(item["status"] in {"complete", "not_applicable", "skipped_by_user"}
+               for item in manifest["modules"].values())
+
+
+def test_qc_preview_runs_before_approval_and_cannot_emit_de(tmp_path):
+    project = build_project(tmp_path / "QC-Preview-Test")
+    approval = yaml.safe_load((project / "qc_approval.yml").read_text(encoding="utf-8"))
+    approval["approved"] = False
+    (project / "qc_approval.yml").write_text(yaml.safe_dump(approval), encoding="utf-8")
+    token = plan_confirmation_token(project)
+    completed = subprocess.run(
+        [str(ROOT / ".pixi/envs/default/bin/python"), str(ROOT / "internal/cli/pipeline.py"),
+         "qc-preview", "--project", str(project), "--run-id", "qc-preview-test",
+         "--confirm-plan", token],
+        cwd=ROOT, text=True, capture_output=True, timeout=180,
+    )
+    assert completed.returncode == 0, completed.stdout + "\n" + completed.stderr
+    run = project / "work/staging/qc-preview-test"
+    assert (run / "01_QC/Figures/Final_PCA.pdf").is_file()
+    assert not (run / "02_Differential").exists()
+    manifest = json.loads((run / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "awaiting_user_qc_approval"
+    assert manifest["formal_analysis"] is False
+
+
+def test_snakemake_generic_batch_design_dry_run(tmp_path):
+    project = build_project(tmp_path / "Generic-Snakemake-Test")
+    run = project / "work/staging/test-dag"
+    completed = subprocess.run([
+        str(ROOT / ".pixi/envs/default/bin/snakemake"),
+        "--snakefile", str(ROOT / "workflow/Snakefile"), "--dry-run", "--cores", "1",
+        "--config", f"project={project}", f"run_dir={run}",
+    ], cwd=ROOT, text=True, capture_output=True, timeout=60)
+    assert completed.returncode == 0, completed.stdout + "\n" + completed.stderr
+    assert "optional_upstream_contract" in completed.stdout
+    assert "differential" in completed.stdout
+    assert "motif" in completed.stdout
+    assert "finalize" in completed.stdout
 
 
 def test_publisher_archives_previous_results_and_promotes_one_complete_run(tmp_path):
@@ -155,7 +241,11 @@ def test_publisher_archives_previous_results_and_promotes_one_complete_run(tmp_p
     (staging / "run_manifest.json").write_text(json.dumps({
         "status": "complete", "project_id": "Publish-Test", "run_id": "run-2",
     }), encoding="utf-8")
-    (project / "project.yml").write_text(yaml.safe_dump({"migration": {"requires_legacy_parity": False}}), encoding="utf-8")
+    (project / "project.yml").write_text(yaml.safe_dump({"migration": {
+        "requires_legacy_parity": False,
+        "scientific_baseline": "v4_workflow",
+        "visual_changes_only": False,
+    }}), encoding="utf-8")
     old_results.mkdir(parents=True)
     (old_results / "index.html").write_text("old", encoding="utf-8")
     completed = subprocess.run([
@@ -184,16 +274,48 @@ def test_publisher_blocks_migrated_project_when_legacy_parity_fails(tmp_path):
     (staging / "run_manifest.json").write_text(json.dumps({
         "status": "complete", "project_id": "Legacy-Project", "run_id": "run-3",
     }), encoding="utf-8")
-    (project / "project.yml").write_text(yaml.safe_dump({"migration": {"requires_legacy_parity": True}}), encoding="utf-8")
+    (project / "project.yml").write_text(yaml.safe_dump({"migration": {
+        "requires_legacy_parity": True,
+        "scientific_baseline": "v4_workflow",
+        "visual_changes_only": False,
+    }}), encoding="utf-8")
     audit = project / "work/audits/run-3"
     audit.mkdir(parents=True)
-    (audit / "legacy_inventory_summary.json").write_text(json.dumps({"passed": False, "missing_families": 10}), encoding="utf-8")
+    (audit / "legacy_regression_summary.json").write_text(json.dumps({"passed": False}), encoding="utf-8")
     completed = subprocess.run([
         str(ROOT / ".pixi/envs/default/bin/python"),
         str(ROOT / "internal/reporting/publish_project_results.py"),
         str(staging), str(project), "--confirm", "PUBLISH:Legacy-Project:run-3",
     ], cwd=ROOT, text=True, capture_output=True)
     assert completed.returncode != 0
-    assert "legacy output parity failed" in completed.stderr
+    assert "file-level and scientific legacy regression gate failed" in completed.stderr
+    assert staging.exists()
+    assert not (project / "results").exists()
+
+
+def test_publisher_blocks_frozen_legacy_results_even_when_staging_is_complete(tmp_path):
+    project = tmp_path / "Frozen-Legacy"
+    staging = project / "work/staging/run-4"
+    for module in (
+        "01_QC", "02_Differential", "03_Enrichment", "04_Regulation",
+        "05_Network", "06_Motif", "07_Exploratory",
+    ):
+        (staging / module).mkdir(parents=True, exist_ok=True)
+        (staging / module / "index.html").write_text(module, encoding="utf-8")
+    (staging / "run_manifest.json").write_text(json.dumps({
+        "status": "complete", "project_id": "Frozen-Legacy", "run_id": "run-4",
+    }), encoding="utf-8")
+    (project / "project.yml").write_text(yaml.safe_dump({"migration": {
+        "requires_legacy_parity": True,
+        "scientific_baseline": "frozen_legacy_results",
+        "visual_changes_only": True,
+    }}), encoding="utf-8")
+    completed = subprocess.run([
+        str(ROOT / ".pixi/envs/default/bin/python"),
+        str(ROOT / "internal/reporting/publish_project_results.py"),
+        str(staging), str(project), "--confirm", "PUBLISH:Frozen-Legacy:run-4",
+    ], cwd=ROOT, text=True, capture_output=True)
+    assert completed.returncode != 0
+    assert "frozen scientific baseline" in completed.stderr
     assert staging.exists()
     assert not (project / "results").exists()

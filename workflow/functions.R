@@ -71,6 +71,14 @@ module_confirmation_string <- function(config) {
   }, character(1)), collapse = ",")
 }
 
+plan_confirmation_string <- function(config, paths, project_file) {
+  ordered <- c(project_file, paths$samples, paths$contrasts, paths$approval, paths$source_manifest)
+  if (any(!file.exists(ordered))) stop("Cannot create a run-plan token while required decision inputs are missing")
+  material <- c(config$project_id, vapply(ordered, sha256_file, character(1)))
+  paste0("PLAN:", config$project_id, ":",
+         substr(digest::digest(paste(material, collapse = "|"), algo = "sha256", serialize = FALSE), 1L, 24L))
+}
+
 canonical_module_state <- function(config, keys) {
   decisions <- lapply(keys, function(key) module_decision(config, key))
   enabled <- vapply(decisions, function(x) identical(x$status, "enabled"), logical(1))
@@ -184,7 +192,7 @@ plot_pca_publication <- function(data, pc1_percent, pc2_percent, title,
     ggrepel::geom_text_repel(ggplot2::aes(label = canonical_sample), size = 2.7,
                              max.overlaps = Inf, show.legend = FALSE, seed = 104729) +
     ggplot2::scale_colour_manual(values = palette) +
-    ggplot2::scale_fill_manual(values = palette) +
+    ggplot2::scale_fill_manual(values = palette, guide = "none") +
     ggplot2::labs(title = title, subtitle = subtitle,
                   x = sprintf("PC1 (%.1f%%)", pc1_percent),
                   y = sprintf("PC2 (%.1f%%)", pc2_percent), colour = NULL, shape = NULL) +
@@ -229,38 +237,166 @@ plot_expression_boxplot <- function(data, title, y_label = "VST expression") {
     ggplot2::theme(legend.position = "none")
 }
 
-plot_ora_publication <- function(data, title, top_n = 12L) {
-  if (!nrow(data)) return(NULL)
-  x <- do.call(rbind, lapply(split(data, data$direction),
-                            function(z) head(z[order(z$padj, -z$fold_enrichment), ], top_n)))
-  clean_term <- function(value) {
-    value <- sub("^(GOBP|GOCC|GOMF|KEGG|REACTOME|HALLMARK)_", "", value)
-    value <- gsub("_", " ", value, fixed = TRUE)
-    vapply(value, function(item) paste(strwrap(item, width = 48), collapse = "\n"), character(1))
-  }
-  # Use exact indexing: `$term` would partially match `term_size` when a
-  # resource does not contain a literal `term` column.
-  x$display_term <- clean_term(x[["pathway"]])
-  x$panel_key <- paste(x$display_term, x$database, x$direction, sep = "___")
-  x$term_label <- factor(x$panel_key, levels = rev(unique(x$panel_key[order(x$padj, -x$fold_enrichment)])))
-  ggplot2::ggplot(x, ggplot2::aes(fold_enrichment, term_label, size = overlap_count, colour = direction)) +
-    ggplot2::geom_segment(ggplot2::aes(x = 1, xend = fold_enrichment, yend = term_label),
-                          colour = "#D9DDE1", linewidth = 0.45) +
-    ggplot2::geom_point(alpha = 0.88) +
-    ggplot2::scale_colour_manual(values = direction_palette[c("Down", "Up")]) +
-    ggplot2::scale_size_continuous(range = c(2, 6)) +
-    ggplot2::scale_y_discrete(labels = function(value) sub("___.*$", "", value)) +
-    ggplot2::facet_grid(. ~ direction, scales = "free_y", space = "free_y") +
-    ggplot2::labs(title = title,
-                  subtitle = sprintf("Top %d terms per direction across databases; every tested term remains in the tables", top_n),
-                  x = "Fold enrichment", y = NULL, size = "Overlap", colour = NULL,
-                  caption = "ORA is threshold-dependent; direction denotes the DEG subset tested.") +
-    theme_publication() + ggplot2::theme(panel.grid.major.x = ggplot2::element_line(colour = "#E6E8EB", linewidth = 0.35))
+clean_ora_term <- function(value, width = 44L) {
+  value <- sub("^(GOBP|GOCC|GOMF|KEGG|REACTOME|HALLMARK)_", "", value)
+  value <- gsub("_", " ", value, fixed = TRUE)
+  vapply(value, function(item) paste(strwrap(item, width = width), collapse = "\n"), character(1))
 }
 
-plot_gsea_overview <- function(data, title, top_n = 12L) {
+reduce_ora_gene_overlap <- function(data, cutoff = getOption("bulk_rnaseq.ora_jaccard", 0.7)) {
+  if (!nrow(data)) return(data)
+  groups <- split(data, interaction(data$database, data$direction, drop = TRUE))
+  reduced <- lapply(groups, function(x) {
+    x <- x[order(x$padj, -x$fold_enrichment), , drop = FALSE]
+    genes <- strsplit(as.character(x$overlap_genes), "/", fixed = TRUE)
+    keep <- logical(nrow(x)); accepted <- list()
+    for (i in seq_len(nrow(x))) {
+      candidate <- unique(genes[[i]])
+      similarity <- if (!length(accepted)) 0 else max(vapply(accepted, function(previous) {
+        union_size <- length(union(candidate, previous))
+        if (!union_size) 0 else length(intersect(candidate, previous)) / union_size
+      }, numeric(1)))
+      if (similarity < cutoff) {
+        keep[[i]] <- TRUE
+        accepted[[length(accepted) + 1L]] <- candidate
+      }
+    }
+    x[keep, , drop = FALSE]
+  })
+  out <- do.call(rbind, reduced)
+  rownames(out) <- NULL
+  out
+}
+
+ora_plot_window <- function(data, database, direction, top_n = 15L, reduce_overlap = FALSE,
+                            fdr_cutoff = getOption("bulk_rnaseq.ora_fdr", 0.05),
+                            jaccard_cutoff = getOption("bulk_rnaseq.ora_jaccard", 0.7)) {
+  x <- data[data$database == database & data$direction == direction &
+              !is.na(data$padj) & data$padj < fdr_cutoff, , drop = FALSE]
+  if (!nrow(x)) return(x)
+  if (reduce_overlap) x <- reduce_ora_gene_overlap(x, cutoff = jaccard_cutoff)
+  x <- head(x[order(x$padj, -x$fold_enrichment), , drop = FALSE], top_n)
+  x$display_term <- clean_ora_term(x$pathway)
+  x$term_label <- factor(x$display_term, levels = rev(unique(x$display_term)))
+  x$minus_log10_padj <- -log10(pmax(x$padj, .Machine$double.xmin))
+  x
+}
+
+plot_ora_publication <- function(data, title, top_n = 12L,
+                                 fdr_cutoff = getOption("bulk_rnaseq.ora_fdr", 0.05)) {
+  x <- data[data$direction %in% c("Up", "Down") & !is.na(data$padj) & data$padj < fdr_cutoff, , drop = FALSE]
+  if (!nrow(x)) return(NULL)
+  counts <- stats::aggregate(pathway ~ database + direction, x, length)
+  names(counts)[[3L]] <- "significant_terms"
+  ggplot2::ggplot(counts, ggplot2::aes(database, significant_terms, fill = direction)) +
+    ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.72), width = 0.64) +
+    ggplot2::geom_text(ggplot2::aes(label = significant_terms),
+                       position = ggplot2::position_dodge(width = 0.72), vjust = -0.3, size = 2.7) +
+    ggplot2::scale_fill_manual(values = direction_palette[c("Down", "Up")]) +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.12))) +
+    ggplot2::labs(title = title,
+                  subtitle = "Number of FDR-significant terms; detailed terms are shown in database-specific figures",
+                  x = NULL, y = sprintf("Significant ORA terms (FDR < %.3g)", fdr_cutoff), fill = NULL,
+                  caption = "No database competes for a shared top-N display quota; complete tested terms remain in the tables.") +
+    theme_publication() + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 28, hjust = 1))
+}
+
+plot_ora_dotplot <- function(data, database, direction, title, top_n = 15L,
+                             fdr_cutoff = getOption("bulk_rnaseq.ora_fdr", 0.05)) {
+  x <- ora_plot_window(data, database, direction, top_n, reduce_overlap = FALSE, fdr_cutoff = fdr_cutoff)
+  if (!nrow(x)) return(NULL)
+  ggplot2::ggplot(x, ggplot2::aes(fold_enrichment, term_label, size = overlap_count,
+                                  colour = minus_log10_padj)) +
+    ggplot2::geom_point(alpha = 0.92) +
+    ggplot2::scale_colour_gradientn(colours = c("#3B4CC0", "#1FA187", "#FDE725")) +
+    ggplot2::scale_size_continuous(range = c(2.2, 6.5)) +
+    ggplot2::labs(title = title,
+                  subtitle = sprintf("Top %d FDR-significant terms ordered by adjusted P", nrow(x)),
+                  x = "Fold enrichment", y = NULL, size = "Overlap", colour = expression(-log[10](FDR)),
+                  caption = "Dots show fold enrichment; every tested term remains in the tables.") +
+    theme_publication() +
+    ggplot2::theme(panel.grid.major.y = ggplot2::element_blank(),
+                   panel.grid.major.x = ggplot2::element_line(colour = "#E6E8EB", linewidth = 0.35))
+}
+
+plot_ora_lollipop <- function(data, database, direction, title, top_n = 15L,
+                              fdr_cutoff = getOption("bulk_rnaseq.ora_fdr", 0.05),
+                              jaccard_cutoff = getOption("bulk_rnaseq.ora_jaccard", 0.7)) {
+  x <- ora_plot_window(data, database, direction, top_n, reduce_overlap = TRUE,
+                       fdr_cutoff = fdr_cutoff, jaccard_cutoff = jaccard_cutoff)
+  if (!nrow(x)) return(NULL)
+  ggplot2::ggplot(x, ggplot2::aes(minus_log10_padj, term_label)) +
+    ggplot2::geom_segment(ggplot2::aes(x = 0, xend = minus_log10_padj, yend = term_label),
+                          colour = "#CDD2D8", linewidth = 0.55) +
+    ggplot2::geom_point(ggplot2::aes(size = overlap_count, colour = fold_enrichment), alpha = 0.95) +
+    ggplot2::scale_colour_gradientn(colours = c("#2C3E50", "#2A9D8F", "#F4D35E")) +
+    ggplot2::scale_size_continuous(range = c(2.2, 6.5)) +
+    ggplot2::labs(title = title,
+                  subtitle = sprintf("Gene-overlap-reduced representative terms (Jaccard < %.2f)", jaccard_cutoff),
+                  x = expression(-log[10](adjusted~P)), y = NULL, size = "Overlap", colour = "Fold enrichment",
+                  caption = "This reduced display does not remove rows from the complete ORA table.") +
+    theme_publication() + ggplot2::theme(panel.grid.major.y = ggplot2::element_blank())
+}
+
+plot_ora_diverging <- function(data, database, title, top_n = 8L,
+                               fdr_cutoff = getOption("bulk_rnaseq.ora_fdr", 0.05),
+                               jaccard_cutoff = getOption("bulk_rnaseq.ora_jaccard", 0.7)) {
+  x <- data[data$database == database & data$direction %in% c("Up", "Down") &
+              !is.na(data$padj) & data$padj < fdr_cutoff, , drop = FALSE]
+  if (!nrow(x)) return(NULL)
+  x <- reduce_ora_gene_overlap(x, cutoff = jaccard_cutoff)
+  x <- do.call(rbind, lapply(split(x, x$direction), function(z) head(z[order(z$padj), , drop = FALSE], top_n)))
+  x$signed_score <- ifelse(x$direction == "Up", 1, -1) * -log10(pmax(x$padj, .Machine$double.xmin))
+  x$display_term <- paste0(ifelse(x$direction == "Up", "UP: ", "DOWN: "), clean_ora_term(x$pathway, 38L))
+  x$term_label <- factor(x$display_term, levels = x$display_term[order(x$signed_score)])
+  ggplot2::ggplot(x, ggplot2::aes(signed_score, term_label, fill = direction)) +
+    ggplot2::geom_col(width = 0.68) +
+    ggplot2::geom_vline(xintercept = 0, colour = "#596068", linewidth = 0.45) +
+    ggplot2::scale_fill_manual(values = direction_palette[c("Down", "Up")]) +
+    ggplot2::scale_x_continuous(labels = function(value) abs(value)) +
+    ggplot2::labs(title = title,
+                  subtitle = "Representative terms after within-direction gene-overlap reduction",
+                  x = expression(-log[10](adjusted~P)), y = NULL,
+                  caption = "Left = downregulated DEG subset; right = upregulated DEG subset.") +
+    theme_publication() + ggplot2::theme(legend.position = "none", panel.grid.major.y = ggplot2::element_blank())
+}
+
+plot_ora_sankey_bubble <- function(data, title, top_n = 2L,
+                                   fdr_cutoff = getOption("bulk_rnaseq.ora_fdr", 0.05)) {
+  x <- data[data$direction %in% c("Up", "Down") & !is.na(data$padj) & data$padj < fdr_cutoff, , drop = FALSE]
+  if (!nrow(x)) return(NULL)
+  x <- do.call(rbind, lapply(split(x, interaction(x$database, x$direction, drop = TRUE)),
+                            function(z) head(z[order(z$padj, -z$fold_enrichment), , drop = FALSE], top_n)))
+  database_count <- length(unique(x$database))
+  x$term_label <- gsub("^(GOBP|GOCC|GOMF|KEGG|REACTOME|HALLMARK)_", "", x$pathway)
+  x$term_label <- gsub("_", " ", x$term_label, fixed = TRUE)
+  label_width <- if (database_count > 1L) 23L else 30L
+  x$term_label <- vapply(x$term_label, function(value) paste(strwrap(value, label_width), collapse = "\n"), character(1))
+  ggplot2::ggplot(x, ggplot2::aes(axis1 = direction, axis2 = term_label,
+                                  y = overlap_count, fill = direction)) +
+    ggalluvial::geom_alluvium(width = 0.10, alpha = 0.58, knot.pos = 0.35) +
+    ggalluvial::geom_stratum(width = 0.11, colour = "white", linewidth = 0.35) +
+    ggplot2::geom_text(stat = ggalluvial::StatStratum,
+                       ggplot2::aes(label = ggplot2::after_stat(stratum)),
+                       size = if (database_count > 1L) 1.55 else 2.15, lineheight = 0.86) +
+    ggplot2::scale_x_discrete(limits = c("Direction", "Enriched term"), expand = c(0.10, 0.10)) +
+    ggplot2::scale_fill_manual(values = direction_palette[c("Down", "Up")]) +
+    ggplot2::facet_wrap(~database, ncol = if (database_count > 1L) 2 else 1, scales = "free_y") +
+    ggplot2::coord_cartesian(clip = "off") +
+    ggplot2::labs(title = title,
+                  subtitle = "Flow width is the number of overlapping genes; terms and directions are unchanged",
+                  x = NULL, y = "Overlapping genes", fill = NULL,
+                  caption = "Only the display is reduced to the top terms; complete ORA tables retain every tested term.") +
+    theme_publication() + ggplot2::theme(legend.position = "bottom", axis.text.y = ggplot2::element_blank(),
+                                        axis.ticks.y = ggplot2::element_blank(), panel.spacing = grid::unit(10, "pt"),
+                                        plot.margin = ggplot2::margin(5.5, 35, 5.5, 5.5))
+}
+
+plot_gsea_overview <- function(data, title, top_n = 12L,
+                               fdr_cutoff = getOption("bulk_rnaseq.gsea_reporting_fdr", 1)) {
   if (!nrow(data)) return(NULL)
-  significant <- data[!is.na(data$padj), , drop = FALSE]
+  significant <- data[!is.na(data$padj) & data$padj <= fdr_cutoff, , drop = FALSE]
+  if (!nrow(significant)) return(NULL)
   significant <- significant[order(significant$padj, -abs(significant$NES)), , drop = FALSE]
   x <- head(significant, top_n)
   x$direction <- ifelse(x$NES >= 0, "Up", "Down")
@@ -276,7 +412,7 @@ plot_gsea_overview <- function(data, title, top_n = 12L) {
                   subtitle = sprintf("Top %d pathways ordered by FDR and |NES|; sign is preserved", nrow(x)),
                   x = "Normalized enrichment score (NES)", y = NULL,
                   size = "Set size", colour = "Rank direction",
-                  caption = "Positive and negative NES represent opposite ends of the declared contrast; GSEA is not causal evidence.") +
+                  caption = "NES sign follows the declared contrast; GSEA is not causal evidence.") +
     theme_publication() + ggplot2::theme(panel.grid.major.x = ggplot2::element_line(colour = "#E6E8EB", linewidth = 0.35))
 }
 
@@ -397,16 +533,43 @@ initialize_context <- function(root, project_dir, run_dir) {
     stop("Formal analyses must be staged under project/work/staging/<run_id>")
   }
   motif_phase <- identical(Sys.getenv("BULK_RNASEQ_MOTIF_PHASE"), "1")
-  if (!motif_phase && dir.exists(run_dir) && length(list.files(run_dir, all.files = TRUE, no.. = TRUE))) {
-    stop("Staging run directory already exists and is not empty: ", run_dir)
+  if (!motif_phase && dir.exists(run_dir)) {
+    existing <- list.files(run_dir, all.files = TRUE, no.. = TRUE)
+    # Snakemake creates the declared log directory before the initialize rule.
+    # An otherwise-empty Logs directory is not a prior analysis and is safe.
+    log_entries <- if (identical(existing, "Logs")) {
+      list.files(file.path(run_dir, "Logs"), all.files = TRUE, no.. = TRUE, full.names = TRUE)
+    } else character()
+    provenance_entries <- if ("Provenance" %in% existing) {
+      list.files(file.path(run_dir, "Provenance"), all.files = TRUE, no.. = TRUE, full.names = TRUE)
+    } else character()
+    allowed_preinit_provenance <- c("upstream_contract_checked")
+    permitted <- identical(Sys.getenv("BULK_RNASEQ_SNAKEMAKE"), "1") &&
+      all(existing %in% c("Logs", "Provenance")) &&
+      all(basename(provenance_entries) %in% allowed_preinit_provenance) &&
+      (!length(log_entries) || setequal(basename(log_entries), "00_initialize.log"))
+    if (length(existing) && !permitted) {
+      stop("Staging run directory already exists and is not empty: ", run_dir,
+           " [snakemake=", Sys.getenv("BULK_RNASEQ_SNAKEMAKE"),
+           "; entries=", paste(existing, collapse = ","),
+           "; logs=", paste(basename(log_entries), collapse = ","), "]")
+    }
   }
   dir.create(run_dir, recursive = TRUE, showWarnings = FALSE)
   config_path <- file.path(project_dir, "project.yml")
   config <- yaml::read_yaml(config_path)
-  expected_confirmation <- module_confirmation_string(config)
-  actual_confirmation <- Sys.getenv("BULK_RNASEQ_MODULE_CONFIRMATION", unset = "")
-  if (!identical(actual_confirmation, expected_confirmation)) {
-    stop("Every analysis requires a fresh exact module confirmation. Expected: ", expected_confirmation)
+  qc_preview_mode <- identical(Sys.getenv("BULK_RNASEQ_QC_PREVIEW"), "1")
+  if (qc_preview_mode) {
+    qc_decision <- config$analysis$modules$qc
+    if (!isTRUE(qc_decision$confirmed) || !identical(qc_decision$status, "enabled")) {
+      stop("QC preview requires an explicitly confirmed enabled QC module")
+    }
+  } else {
+    expected_confirmation <- module_confirmation_string(config)
+    actual_confirmation <- Sys.getenv("BULK_RNASEQ_MODULE_CONFIRMATION", unset = "")
+    if (!identical(actual_confirmation, expected_confirmation)) {
+      stop("Every analysis requires a fresh exact module confirmation. Expected: ", expected_confirmation)
+    }
   }
   figure_formats <- config$export$formats %||% "pdf"
   if (!"pdf" %in% figure_formats) stop("PDF is the mandatory default figure format")
@@ -421,6 +584,11 @@ initialize_context <- function(root, project_dir, run_dir) {
   )
   missing <- names(paths)[!vapply(paths, file.exists, logical(1))]
   if (length(missing)) stop("Required project inputs are missing: ", paste(missing, collapse = ", "))
+  expected_plan <- plan_confirmation_string(config, paths, config_path)
+  actual_plan <- Sys.getenv("BULK_RNASEQ_PLAN_CONFIRMATION", unset = "")
+  if (!identical(actual_plan, expected_plan)) {
+    stop("Every analysis requires fresh approval of the complete scientific plan. Expected: ", expected_plan)
+  }
   samples <- read_project_table(paths$samples)
   contrasts <- read_project_table(paths$contrasts)
   required_samples <- c("sample", "excluded", "exclusion_reason")
@@ -432,12 +600,15 @@ initialize_context <- function(root, project_dir, run_dir) {
   if (length(setdiff(required_contrasts, names(contrasts)))) stop("contrasts.tsv lacks required columns")
   safe_id(contrasts$contrast_id, "contrast_id")
   if (anyDuplicated(contrasts$contrast_id)) stop("contrast_id values must be unique")
-  if (any(!as_flag(contrasts$confirmed, "contrasts.tsv confirmed"))) stop("Every contrast must be explicitly confirmed")
+  if (!qc_preview_mode && any(!as_flag(contrasts$confirmed, "contrasts.tsv confirmed"))) {
+    stop("Every contrast must be explicitly confirmed")
+  }
   approval <- yaml::read_yaml(paths$approval)
   source_manifest <- yaml::read_yaml(paths$source_manifest)
   count_hash <- sha256_file(paths$counts)
   if (!identical(tolower(count_hash), tolower(source_manifest$sha256))) stop("Count matrix SHA256 differs from source_manifest.yml")
-  if (!isTRUE(approval$approved) || !identical(tolower(count_hash), tolower(approval$counts_sha256))) {
+  if (!qc_preview_mode && (!isTRUE(approval$approved) ||
+                           !identical(tolower(count_hash), tolower(approval$counts_sha256)))) {
     stop("QC approval is missing or stale for the current count matrix")
   }
   if (!identical(config$counts_provenance$normalization, "raw_counts")) stop("DESeq2 requires confirmed raw_counts")

@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,8 +22,12 @@ def test_public_workflow_has_exactly_seven_scientific_modules():
 
 
 def test_only_blank_project_template_is_committed():
-    projects = sorted(path.name for path in (ROOT / "projects").iterdir() if path.is_dir())
-    assert projects == ["_template"]
+    tracked = subprocess.run(
+        ["git", "ls-files", "projects"], cwd=ROOT, check=True,
+        capture_output=True, text=True,
+    ).stdout.splitlines()
+    assert tracked
+    assert all(path.startswith("projects/_template/") for path in tracked)
     template = ROOT / "projects/_template"
     assert (template / "project.yml").is_file()
     assert (template / "input/README.md").is_file()

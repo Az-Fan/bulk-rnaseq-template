@@ -70,15 +70,19 @@ def main() -> None:
     if any(not (source / module / "index.html").is_file() for module in MODULES):
         raise SystemExit("Staging run lacks one or more module indexes")
     project_config = yaml.safe_load((project / "project.yml").read_text(encoding="utf-8"))
+    if project_config.get("migration", {}).get("scientific_baseline") == "frozen_legacy_results":
+        raise SystemExit(
+            "Publication blocked: this project's restored historical results are the frozen "
+            "scientific baseline. Visual-only revisions must be written to visualization_revision/."
+        )
     if project_config.get("migration", {}).get("requires_legacy_parity", False):
-        audit = project / "work/audits" / run_id / "legacy_inventory_summary.json"
+        audit = project / "work/audits" / run_id / "legacy_regression_summary.json"
         if not audit.is_file():
-            raise SystemExit("Publication blocked: migrated project lacks the required legacy output inventory")
+            raise SystemExit("Publication blocked: migrated project lacks the complete legacy regression report")
         audit_summary = json.loads(audit.read_text(encoding="utf-8"))
         if not audit_summary.get("passed", False):
             raise SystemExit(
-                "Publication blocked: legacy output parity failed "
-                f"({audit_summary.get('missing_families', 'unknown')} output families missing)"
+                "Publication blocked: the file-level and scientific legacy regression gate failed"
             )
 
     history_root.mkdir(parents=True, exist_ok=True)

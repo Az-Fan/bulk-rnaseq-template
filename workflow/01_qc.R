@@ -17,6 +17,8 @@ run_qc <- function(context) {
     if ("Gene_ID" %in% names(raw)) "Gene_ID" else names(raw)[[1L]]
   if (!gene_id_column %in% names(raw)) stop("Configured gene_id_column is absent: ", gene_id_column)
   gene_symbol_column <- context$config$inputs$gene_symbol_column %||% if ("Name" %in% names(raw)) "Name" else NULL
+  entrez_column <- context$config$inputs$entrez_id_column %||%
+    if ("Entrez_geneID" %in% names(raw)) "Entrez_geneID" else NULL
 
   count_frame <- raw[, sample_columns, drop = FALSE]
   count_frame[] <- lapply(count_frame, function(x) suppressWarnings(as.numeric(x)))
@@ -32,8 +34,43 @@ run_qc <- function(context) {
   if (anyNA(gene_id) || any(!nzchar(gene_id))) stop("Gene IDs must be non-empty")
   if (anyDuplicated(gene_id)) stop("Duplicate gene IDs require an explicit upstream aggregation decision")
   rownames(count_matrix) <- gene_id
-  gene_symbol <- if (is.null(gene_symbol_column)) rep(NA_character_, length(gene_id)) else as.character(raw[[gene_symbol_column]])
-  annotation <- data.frame(gene_id = gene_id, gene_symbol = gene_symbol, stringsAsFactors = FALSE)
+  input_symbol <- if (is.null(gene_symbol_column)) rep(NA_character_, length(gene_id)) else as.character(raw[[gene_symbol_column]])
+  input_entrez <- if (is.null(entrez_column)) rep(NA_character_, length(gene_id)) else as.character(raw[[entrez_column]])
+  annotation_resource <- context$config$resources$annotation_map %||% NULL
+  if (!is.null(annotation_resource)) {
+    frozen <- readRDS(resource_path(context, annotation_resource))$mapping
+    idx <- match(gene_id, frozen$gene_id)
+    # The legacy table contains the tested genes after count filtering. Genes
+    # outside that set cannot enter DE/enrichment, so retain input annotation
+    # for them while requiring complete coverage of the eventual tested set.
+    gene_symbol <- input_symbol
+    entrez_id <- input_entrez
+    covered <- !is.na(idx)
+    gene_symbol[covered] <- frozen$gene_symbol[idx[covered]]
+    entrez_id[covered] <- frozen$entrez_id[idx[covered]]
+  } else if (identical(context$config$species, "human") && all(grepl("^ENSG", head(gene_id, 10L)))) {
+    # Legacy step 01 used org.Hs.eg.db mapIds(multiVals = "first") and only
+    # fell back to the input symbol when SYMBOL was unmapped. Reusing input
+    # annotation directly changes renamed genes, duplicate-symbol handling,
+    # ORA universe membership and GSEA set sizes.
+    gene_symbol <- unname(AnnotationDbi::mapIds(
+      org.Hs.eg.db::org.Hs.eg.db, keys = gene_id, column = "SYMBOL",
+      keytype = "ENSEMBL", multiVals = "first"
+    ))
+    entrez_id <- unname(AnnotationDbi::mapIds(
+      org.Hs.eg.db::org.Hs.eg.db, keys = gene_id, column = "ENTREZID",
+      keytype = "ENSEMBL", multiVals = "first"
+    ))
+    missing_symbol <- is.na(gene_symbol) | !nzchar(gene_symbol)
+    gene_symbol[missing_symbol] <- input_symbol[missing_symbol]
+    missing_symbol <- is.na(gene_symbol) | !nzchar(gene_symbol)
+    gene_symbol[missing_symbol] <- gene_id[missing_symbol]
+  } else {
+    gene_symbol <- input_symbol
+    entrez_id <- input_entrez
+  }
+  annotation <- data.frame(gene_id = gene_id, gene_symbol = gene_symbol,
+                           entrez_id = entrez_id, stringsAsFactors = FALSE)
   rownames(annotation) <- gene_id
 
   samples <- context$samples

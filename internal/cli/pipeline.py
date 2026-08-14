@@ -15,9 +15,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from internal.lib.core import (compare_de, environment_resources, inventory_legacy_outputs,
-                               import_counts, import_resource_pack, load_yaml, module_confirmation_string,
-                               validate_project, validate_resources)
+from internal.lib.core import (analysis_decision_rows, compare_de, environment_resources,
+                               inventory_legacy_outputs, import_counts, import_resource_pack,
+                               load_yaml, module_confirmation_string, plan_confirmation_token,
+                               validate_project, validate_qc_preview, validate_resources)
 from internal.lib.core import clean_preview, sync_declared_resources
 
 
@@ -31,9 +32,18 @@ def main() -> int:
     analyze.add_argument("--project", type=Path, required=True)
     analyze.add_argument("--run-id")
     analyze.add_argument("--publish", action="store_true")
+    analyze.add_argument("--resume", action="store_true", help="Resume the exact existing Snakemake staging run")
     analyze.add_argument("--confirm-modules", help="Exact selection printed by `pipeline modules`")
+    analyze.add_argument("--confirm-plan", help="Exact one-run token printed by `pipeline plan`")
     modules = sub.add_parser("modules")
     modules.add_argument("--project", type=Path, required=True)
+    plan = sub.add_parser("plan")
+    plan.add_argument("--project", type=Path, required=True)
+    qc_preview = sub.add_parser("qc-preview")
+    qc_preview.add_argument("--project", type=Path, required=True)
+    qc_preview.add_argument("--run-id")
+    qc_preview.add_argument("--confirm-plan", required=True,
+                            help="Exact token printed by `pipeline plan` after confirming input/design/filtering")
     check = sub.add_parser("check")
     check.add_argument("--project", type=Path, required=True)
     inv = sub.add_parser("inventory")
@@ -117,7 +127,9 @@ def main() -> int:
     if args.command == "analyze":
         project = args.project.resolve()
         cfg = validate_project(project / "project.yml")
+        migration = cfg.get("migration", {})
         expected_modules = module_confirmation_string(cfg)
+        expected_plan = plan_confirmation_token(project, cfg)
         supplied_modules = args.confirm_modules
         if not supplied_modules and sys.stdin.isatty():
             print("Confirmed module selection required for this analysis:")
@@ -130,12 +142,27 @@ def main() -> int:
                 "required_argument": f"--confirm-modules '{expected_modules}'",
             }, indent=2))
             return 2
+        supplied_plan = args.confirm_plan
+        if not supplied_plan and sys.stdin.isatty():
+            print("Fresh approval of the complete scientific plan is required:")
+            print(expected_plan)
+            supplied_plan = input("Type the exact plan token to continue: ").strip()
+        if supplied_plan != expected_plan:
+            print(json.dumps({
+                "status": "stopped_unconfirmed_plan",
+                "reason": "The token binds this run to project.yml, samples, contrasts, QC approval and counts manifest.",
+                "required_command": f"pixi run plan -- --project {project}",
+                "required_argument": f"--confirm-plan '{expected_plan}'",
+            }, indent=2))
+            return 2
         run_id = args.run_id or dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ-v4")
         if not run_id.replace("-", "").replace("_", "").replace(".", "").isalnum():
             raise ValueError("run-id may contain only letters, numbers, dot, dash and underscore")
         staging = project / "work" / "staging" / run_id
-        if staging.exists():
+        if staging.exists() and not args.resume:
             raise ValueError(f"Staging run already exists: {staging}")
+        if args.resume and not staging.exists():
+            raise ValueError(f"Cannot resume a staging run that does not exist: {staging}")
         resources = environment_resources()
         counts = project / cfg["inputs"]["counts_file"]
         estimate = {
@@ -150,25 +177,32 @@ def main() -> int:
         print(json.dumps({"analysis_estimate": estimate}, indent=2), flush=True)
         env = os.environ.copy()
         env.update({"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
-                    "BULK_RNASEQ_MODULE_CONFIRMATION": expected_modules})
-        rscript = shutil.which("Rscript")
-        if not rscript:
-            raise ValueError("Rscript is not available inside the locked Pixi environment")
-        completed = subprocess.run([rscript, str(ROOT / "workflow/run.R"), str(project), str(staging)],
-                                   cwd=ROOT, env=env, check=False)
-        if completed.returncode == 42:
-            motif_env = ROOT / ".pixi/envs/motif/bin"
-            motif_rscript = motif_env / "Rscript"
-            if not motif_rscript.is_file():
-                raise ValueError("Motif is enabled but the locked Pixi motif environment is not installed")
-            motif_env_vars = env.copy()
-            motif_env_vars["PATH"] = str(motif_env) + os.pathsep + motif_env_vars.get("PATH", "")
-            motif_env_vars["BULK_RNASEQ_MOTIF_PHASE"] = "1"
-            completed = subprocess.run([str(motif_rscript), str(ROOT / "workflow/run.R"), str(project), str(staging)],
-                                       cwd=ROOT, env=motif_env_vars, check=False)
+                    "BULK_RNASEQ_MODULE_CONFIRMATION": expected_modules,
+                    "BULK_RNASEQ_PLAN_CONFIRMATION": expected_plan})
+        locked_bin = ROOT / ".pixi/envs/default/bin"
+        env["PATH"] = str(locked_bin) + os.pathsep + env.get("PATH", "")
+        locked_snakemake = ROOT / ".pixi/envs/default/bin/snakemake"
+        snakemake = str(locked_snakemake) if locked_snakemake.is_file() else shutil.which("snakemake")
+        if not snakemake:
+            raise ValueError("Snakemake is not available inside the locked Pixi environment")
+        workers = min(cfg.get("compute", {}).get("max_workers", 3), resources["recommended_workers"], 3)
+        completed = subprocess.run([
+            snakemake, "--snakefile", str(ROOT / "workflow/Snakefile"),
+            "--config", f"project={project}", f"run_dir={staging}",
+            "--profile", str(ROOT / "workflow/profiles/local"),
+            "--cores", str(workers), "--jobs", str(workers),
+            "--resources", f"mem_mb={max(1024, int(resources['available_memory_gib'] * 1024 * 0.75))}",
+        ], cwd=ROOT, env=env, check=False)
         if completed.returncode:
             print(json.dumps({"status": "failed_explicit", "staging": str(staging)}, indent=2))
             return completed.returncode
+        if migration.get("requires_legacy_parity"):
+            print(json.dumps({
+                "status": "complete_staging_requires_legacy_regression",
+                "staging": str(staging),
+                "reason": "A migrated project may be published only after the file-level and scientific regression gate passes.",
+            }, indent=2))
+            return 0
         if args.publish:
             token = f"PUBLISH:{cfg['project_id']}:{run_id}"
             completed = subprocess.run([
@@ -179,6 +213,42 @@ def main() -> int:
         print(json.dumps({"status": "complete", "staging": str(staging),
                           "publish_command": f"pixi run publish-results -- {staging} {project} --confirm PUBLISH:{cfg['project_id']}:{run_id}"}, indent=2))
         return 0
+    if args.command == "qc-preview":
+        project = args.project.resolve()
+        cfg = validate_qc_preview(project / "project.yml")
+        expected_plan = plan_confirmation_token(project, cfg)
+        if args.confirm_plan != expected_plan:
+            print(json.dumps({
+                "status": "stopped_unconfirmed_qc_plan",
+                "required_command": f"pixi run plan -- --project {project}",
+                "required_argument": f"--confirm-plan '{expected_plan}'",
+            }, indent=2))
+            return 2
+        run_id = args.run_id or dt.datetime.now(dt.timezone.utc).strftime("qc-preview-%Y%m%dT%H%M%SZ")
+        if not run_id.replace("-", "").replace("_", "").replace(".", "").isalnum():
+            raise ValueError("run-id may contain only letters, numbers, dot, dash and underscore")
+        staging = project / "work/staging" / run_id
+        if staging.exists():
+            raise ValueError(f"QC preview staging already exists: {staging}")
+        env = os.environ.copy()
+        env.update({
+            "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
+            "BULK_RNASEQ_QC_PREVIEW": "1", "BULK_RNASEQ_PLAN_CONFIRMATION": expected_plan,
+        })
+        locked_bin = ROOT / ".pixi/envs/default/bin"
+        env["PATH"] = str(locked_bin) + os.pathsep + env.get("PATH", "")
+        rscript = locked_bin / "Rscript"
+        completed = subprocess.run([
+            str(rscript), str(ROOT / "workflow/snakemake/qc_preview.R"), str(project), str(staging),
+        ], cwd=ROOT, env=env, check=False)
+        if completed.returncode:
+            print(json.dumps({"status": "failed_explicit", "qc_preview": str(staging)}, indent=2))
+            return completed.returncode
+        print(json.dumps({
+            "status": "awaiting_user_qc_approval", "qc_preview": str(staging),
+            "next": "Inspect every QC figure, then explicitly update samples.tsv and qc_approval.yml before generating a new formal plan.",
+        }, indent=2))
+        return 0
     if args.command == "modules":
         project_file = args.project / "project.yml" if args.project.is_dir() else args.project
         cfg = load_yaml(project_file)
@@ -186,6 +256,21 @@ def main() -> int:
         rows = [{"module": name, **decision} for name, decision in cfg["analysis"]["modules"].items()]
         print(json.dumps({"project_id": cfg["project_id"], "modules": rows,
                           "confirmation_token": selection}, indent=2, ensure_ascii=False))
+        return 0
+    if args.command == "plan":
+        project = args.project.resolve()
+        project_file = project / "project.yml" if project.is_dir() else project
+        cfg = load_yaml(project_file)
+        project_dir = project_file.parent
+        print(json.dumps({
+            "project_id": cfg.get("project_id"),
+            "status": "awaiting_fresh_user_confirmation",
+            "project_decision_confirmation": cfg.get("decision_confirmation", {}),
+            "decisions": analysis_decision_rows(project_dir, cfg),
+            "module_confirmation_token": module_confirmation_string(cfg),
+            "plan_confirmation_token": plan_confirmation_token(project_dir, cfg),
+            "instruction": "Show every row to the user. Run only after the user confirms this exact plan in the current conversation.",
+        }, indent=2, ensure_ascii=False))
         return 0
     if args.command == "check":
         cfg = validate_project(args.project / "project.yml" if args.project.is_dir() else args.project)

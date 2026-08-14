@@ -1,0 +1,18 @@
+legacy_step	legacy_script	new_module	scientific_engine	legacy_output_roots	migration_policy
+01	01_deseq2_qc_diff.R	01_QC;02_Differential	DESeq2+VST+ashr	01_QC;02_Differential	Preserve model, factor levels, filtering, sample set, coordinates and tables
+02	02_prepare_heatmap_matrix.R	02_Differential	legacy matrix preparation	02_Differential/Tables	Preserve gene/sample set, values, scaling direction and stored ordering
+03	03_plot_volcano_ma_heatmap.R	02_Differential	legacy ggplot/heatmap layer	02_Differential/Figures	Preserve plot data and classifications; improve presentation only
+04	04_ora_enrichment.R	03_Enrichment	clusterProfiler compareCluster+enricher	03_Enrichment/ORA	Preserve Entrez universe, Up/Down/All clusters, databases and BH adjustment
+04b	04b_ora_sankey_bubble.R	03_Enrichment	legacy ORA post-processing	03_Enrichment/ORA/Sankey	Preserve source ORA rows; presentation may improve
+05	05_gsea_core.R	03_Enrichment	clusterProfiler GSEA	03_Enrichment/GSEA	Preserve Wald-stat ranking, seed 123, serial execution and all full tables
+06	06_gsea_tf_databases.R	04_Regulation	clusterProfiler GSEA	04_Regulation/TF_Target_GSEA	Preserve shrunken-LFC ranking, TF databases and seed 123
+07	07_gsea_pathway_heatmap.R	03_Enrichment	legacy GSEA heatmap	03_Enrichment/GSEA/Figures	Preserve pathway/sample inputs and values
+08	08_kegg_pathview_maps.R	07_Exploratory	Pathview	03_Enrichment/ORA/KEGG/Figures/pathview_maps	Use frozen KEGG assets; no formal-run network fetch
+09	09_ppi_string_network.R	05_Network	STRINGdb+igraph	05_Network/PPI	Preserve score 400, top 200 DEGs, node/edge sets, degree and modules
+10	10_tf_activity_decoupler.R	04_Regulation	decoupleR run_ulm	04_Regulation/TF_Activity	Preserve CollecTRI network, minsize 5 and score semantics
+11	11_gsva_tf_correlation.R	04_Regulation	GSVA gsvaParam	04_Regulation/GSVA	Preserve Gaussian kcdf, matrices and correlations
+12	12_gene_boxplots.R	02_Differential;07_Exploratory	legacy expression summaries	04_Regulation/boxplots	Preserve genes, samples, transformed values and group order
+13	13_progeny_decoupler.R	04_Regulation	decoupleR run_mlm	04_Regulation/PROGENy	Preserve PROGENy top 500 network and all three figure/table families
+14	14_custom_gene_sets.R	07_Exploratory	clusterProfiler GSEA+legacy heatmaps	06_Custom	Preserve custom sets, shrunken-LFC ranking, size 3-500 and per-set outputs
+NEW	motif extension	06_Motif	STREME+AME	06_Motif	New counts-only exploratory branch; Up/Down separate with matched non-DE background
+OPTIONAL	xuzhougeng upstream adapter	upstream gate	pinned omics-pipelines	results/04-quant/counts.tsv	Disabled unless explicitly confirmed; cannot run downstream DE/enrichment

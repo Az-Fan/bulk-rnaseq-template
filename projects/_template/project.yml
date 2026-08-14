@@ -8,6 +8,7 @@ counts_provenance:
   feature_level: gene
   normalization: unknown
   technical_replicates: unknown
+  technical_replicate_handling: unknown
   upstream_filtering: unknown
   strandedness: unknown
   genome_annotation: unknown
@@ -27,6 +28,7 @@ inputs:
   qc_approval_file: qc_approval.yml
   gene_id_column: gene_id
   gene_symbol_column: gene_symbol
+  entrez_id_column: null
   strip_gene_version: true
 
 # Must be answered for every project, even when upstream is not needed.
@@ -41,6 +43,17 @@ upstream:
   allow_wsl: false
   target: results/04-quant/counts.tsv
 
+# Project-level choices; every formal run still needs a fresh `pixi run plan` token.
+decision_confirmation:
+  input_design_filtering: false
+  differential: false
+  enrichment: false
+  regulation: false
+  network: false
+  motif: false
+  exploratory: false
+  reporting_export: false
+
 filtering:
   min_count: 10
   min_samples: 3
@@ -49,6 +62,11 @@ thresholds:
   mode: screening
   padj: 0.05
   abs_lfc: 1.0
+
+differential:
+  primary_profile: Primary
+  volcano_label_count: 15
+  heatmap_genes_per_direction: 25
 
 # Every decision remains unconfirmed until the user answers for this project.
 analysis:
@@ -74,14 +92,88 @@ export:
 
 resources:
   frozen_only: true
+  annotation_map: null
+  enrichment_gene_sets: REQUIRES_RESOURCE_SELECTION
+  activity: []
+  tf_databases: []
+  network: REQUIRES_RESOURCE_SELECTION
+  motif_fasta: REQUIRES_RESOURCE_SELECTION
+  motif_gtf: REQUIRES_RESOURCE_SELECTION
+  motif_database: REQUIRES_RESOURCE_SELECTION
 
 enrichment:
-  collections: [H, C2, C5]
+  ora_databases: [GO_BP, GO_CC, GO_MF, KEGG, Reactome, Hallmark]
+  gsea_databases: [Reactome, Hallmark, KEGG, GO_BP]
+  ora_profiles: [Primary]
+  ora_fdr: 0.05
+  gsea_reporting_fdr: 0.25
+  redundancy_jaccard: 0.7
+  random_seed: 123
   min_size: 15
   max_size: 500
   overview_terms: 20
   ora_overview_terms: 12
   gsea_curves: 6
+
+regulation:
+  target_tfs: []
+  focus_pathway: MAPK
+  top_tfs: 30
+  top_pathways: 30
+  minimum_targets: 5
+  tf_gsea_fdr: 0.05
+  tf_gsea_curves: 5
+  tf_gsea_min_size: 10
+  tf_gsea_max_size: 500
+  random_seed: 123
+  gsva_database: Hallmark
+  correlation_method: pearson
+  correlation_pathways: 50
+  contrast_overview_tfs: 25
+  target_tf_genes: 30
+  tf_expression_count: 20
+  tf_activity_pvalue: 0.05
+  external_tf_gsea_rank: wald_statistic
+
+network:
+  deg_profile: Primary
+  max_input_genes: 200
+  minimum_string_score: 400
+  module_enrichment_fdr: 0.05
+  network_label_count: 30
+
+exploratory:
+  target_genes: []
+  custom_gene_sets:
+    resource_id: REQUIRES_RESOURCE_SELECTION
+    formal_min_size: 3
+    max_size: 500
+    random_seed: 123
+    rank_metric: wald_statistic
+    curve_mode: top_reportable
+    reporting_fdr: 0.25
+    curve_count: 10
+    heatmap_cluster_rows: true
+    heatmap_cluster_columns: true
+  pathview: {}
+  personalized:
+    consumes_standard_outputs_only: true
+  wgcna:
+    minimum_samples: 15
+
+motif:
+  deg_profile: Primary
+  promoter_upstream_bp: 1000
+  promoter_downstream_bp: 100
+  minimum_foreground_genes: 10
+  streme_min_width: 6
+  streme_max_width: 15
+  streme_pvalue: 0.05
+  known_motif_display: 15
+  background_matching:
+    gc: true
+    promoter_length: true
+    base_expression: true
 
 qc:
   clustering_method: complete
@@ -90,3 +182,5 @@ compute:
   threads_per_worker: 1
 migration:
   requires_legacy_parity: false
+  scientific_baseline: v4_workflow
+  visual_changes_only: false

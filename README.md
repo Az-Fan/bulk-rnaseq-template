@@ -1,78 +1,114 @@
 # Bulk RNA-seq analysis platform v4
 
-这是一个面向 Linux x86-64 的“一仓库、多项目”Bulk RNA-seq 分析模板。WSL2
-适合下游分析；上游 FASTQ→STAR→counts 适配器默认只允许在 Linux 服务器上显式
-运行。项目根目录由代码位置自动解析，不绑定用户名或绝对路径。
+面向 Linux x86-64 的“一仓库、多项目”Bulk RNA-seq 平台。WSL2 适合下游分析；可选 FASTQ→STAR→counts 上游默认只允许在 Linux 服务器上显式运行。项目根目录由代码位置自动解析，不绑定用户名或个人绝对路径。
 
 ## 使用者只需关注
 
 ```text
 bulk-rnaseq-v4/
 ├── README.md                 # 本入口
-├── AGENTS.md                 # Agent 必须遵守的合同和完整目录树
+├── AGENTS.md                 # Agent 的硬约束、决策清单和完整目录树
 ├── pixi.toml / pixi.lock     # 唯一软件环境
-├── workflow/                 # 7 个可审查的科学模块
+├── workflow/                 # Snakemake + 7 个可审查科学模块
 ├── projects/
-│   └── _template/            # 空白项目模板
+│   ├── _template/            # 唯一空白模板
+│   └── <project_id>/         # 每个真实项目的数据、配置、结果和工作区
 ├── resources/                # 多项目共享的冻结资源
-├── tests/                    # 通用结构、统计与运行测试
-└── internal/                 # CLI、schema、发布、QA、上游适配等基础设施
+├── tests/                    # 结构、统计、回归、渲染和禁令测试
+└── internal/                 # CLI、schema、发布、审计和上游适配
 ```
 
-新项目不要复制仓库，只复制项目模板：
+核心科学代码只有七个编号模块：QC、差异表达、富集、调控、网络、motif、探索分析。详细职责和完整目录树见 [AGENTS.md](AGENTS.md)。
+当前科学支持边界和逐模块审计见 [workflow/SCIENTIFIC_AUDIT.md](workflow/SCIENTIFIC_AUDIT.md)。
+
+## 新项目
 
 ```bash
 pixi install --locked --all
 pixi run init-project -- --project-id MY_PROJECT
 ```
 
-新项目故意处于不可运行状态。Agent 必须先向用户确认 counts 来源、物种/注释、
-样本设计、contrast、QC 决定、是否有上游 FASTQ，以及每个分析模块。任何未确认项
-都会使校验失败。
+新项目故意不可直接运行。Agent 必须先确认 counts 来源、物种/annotation、样本设计、contrast、QC、模块，以及会影响结果或展示的参数。
 
-## 每次分析都重新确认模块
-
-即使 `project.yml` 已经填写，每次正式分析前 Agent 仍必须把模块清单展示给用户并
-获得本次确认。随后执行：
+导入 counts、填写样本/设计并确认输入过滤参数后，先生成计划并只运行 QC 预览：
 
 ```bash
-pixi run modules -- --project projects/MY_PROJECT
+pixi run plan -- --project projects/MY_PROJECT
+pixi run qc-preview -- --project projects/MY_PROJECT \
+  --confirm-plan '<plan_confirmation_token>'
+```
+
+QC 预览不会运行 DE/ORA，也不能发布。查看全部 QC/PCA 后，由用户明确更新 `samples.tsv` 排除项和 `qc_approval.yml`。随后完成其他参数选择，再执行 `check-project` 和正式计划。
+
+## 每次运行都要重新确认
+
+```bash
+pixi run plan -- --project projects/MY_PROJECT
+```
+
+该命令列出本次必须由用户确认的完整计划：输入与设计、过滤/DEG 阈值、ORA/GSEA、TF/GSVA/PROGENy、PPI、motif、boxplot/自定义分析、报告和导出。
+
+用户在当前对话确认后，使用输出中的两个令牌：
+
+```bash
 pixi run analyze -- --project projects/MY_PROJECT \
-  --confirm-modules '<上一条命令打印的完整确认串>'
+  --confirm-modules '<module_confirmation_token>' \
+  --confirm-plan '<plan_confirmation_token>'
 ```
 
-直接调用 R 入口也需要同一确认串，不能绕过。分析先写入
-`projects/<id>/work/staging/<run_id>/`；只有完整 QA 通过后才能显式发布到唯一的
-`projects/<id>/results/`。
+计划令牌绑定项目配置、样本表、contrasts、QC 审批和 counts 来源清单；任一内容变化都会使旧令牌失效。结果先写入 `projects/<id>/work/staging/<run_id>/`，通过 QA 后才能显式发布到唯一的 `projects/<id>/results/`。
 
-## 图件规则
+## 科学默认与边界
 
-默认只输出矢量 PDF。只有用户明确要求 PNG 时，才在该项目中加入
-`export.formats: [pdf, png]`。火山图使用经典单面板风格，完整显示全部数据点、
-阈值线与固定规则标签；不为美观隐藏极端值或改变统计分类。
+- DESeq2 只接受明确确认的 raw integer counts。
+- 批次和协变量进入设计公式；不在校正表达值上做 DESeq2。
+- QC PCA 使用 blind VST；模型相关表达图使用 `blind = FALSE` VST。
+- 一个共享 DESeq2 模型供所有 contrasts 使用；效应量展示使用 ashr 收缩。
+- ORA 使用 tested mapped genes 作为 universe，并分开 Up/Down。
+- GSEA 使用完整排序；通用项目默认推荐 Wald statistic。
+- top-N、冗余约简和曲线数只改变展示，不删完整结果表。
+- 默认仅导出矢量 PDF；只有用户明确要求才增加 PNG。
+- motif、TF/PROGENy activity 和 PPI 只能解释为关联或探索证据。
 
-## 可选上游
+当前尚未通过通用验证的 peak-aware motif、WGCNA、personalized executor 和新项目 Pathview 会被硬门禁阻止，不能静默标记完成。人类以外物种若启用尚无冻结物种资源的模块，也会明确失败。
 
-`internal/upstream/omics-pipelines` 固定为上游项目的特定 Git 提交。适配器只调用
-FASTQ QC、fastp、STAR 和合并 raw gene counts，不调用上游差异分析或富集，也不
-创建或下载 STAR index。
+## 可选服务器上游
 
-默认模板为：
+`internal/upstream/omics-pipelines` 固定为 `xuzhougeng/omics-pipelines` 的指定提交。适配器只调用 FASTQ QC、fastp、STAR 和 raw gene-count merge，不调用其下游 DESeq2 或 enrichment，不在 WSL 建立或下载 STAR index。
 
-```yaml
-upstream:
-  status: unconfirmed
-  execution_host: server
-  allow_wsl: false
+只有用户明确选择上游后才执行：
+
+```bash
+pixi run upstream-plan -- --project projects/MY_PROJECT
 ```
 
-用户明确选择上游后，Agent 才能准备服务器配置，并仍需提交 `upstream-plan` 打印
-的精确确认令牌。服务器应使用：
+服务器克隆应使用：
 
 ```bash
 git clone --recurse-submodules <repo-url>
+pixi install --locked --all
 ```
 
-FASTQ、STAR index、冻结数据库、项目输入、运行缓存和结果均不提交 GitHub。
+FASTQ、STAR index、冻结数据库、项目输入、缓存和结果默认均不提交 GitHub。
 
-完整初始化问题、目录职责、科学边界和删除规则见 [AGENTS.md](AGENTS.md)。
+## 验证
+
+```bash
+pixi run doctor
+pixi run forbidden-check
+pixi run test
+```
+
+`doctor` 检查路径可迁移性和本机资源；禁令测试确保没有第二套 R 安装流程；测试覆盖 schema、确认门禁、通用多 contrast、历史输出契约和图形发布。
+
+## GitHub CLI 授权
+
+`gh` 已纳入同一个 Pixi 锁文件。不要把 Personal Access Token 发到聊天或写进 remote URL。在 WSL 仓库根目录执行：
+
+```bash
+pixi run gh auth login --hostname github.com --git-protocol https --web
+pixi run gh auth refresh --hostname github.com --scopes repo,workflow
+pixi run gh auth status
+```
+
+浏览器中只授权你希望本仓库使用的 GitHub 账户。当前 remote 为 `https://github.com/Az-Fan/bulk-rnaseq-template.git`；授权完成后仍需用户明确批准，Agent 才能 commit/push。

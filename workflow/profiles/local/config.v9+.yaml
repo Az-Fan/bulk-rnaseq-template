@@ -1,0 +1,8 @@
+cores: 3
+jobs: 3
+resources:
+  mem_mb: 11000
+printshellcmds: true
+show-failed-logs: true
+rerun-incomplete: true
+keep-going: false
