@@ -16,5 +16,6 @@ jobs:
           pixi-version: v0.76.2
           cache: true
       - run: pixi install --locked --all
+      - run: pixi run runtime-check
       - run: pixi run forbidden-check
       - run: pixi run test

@@ -89,6 +89,8 @@ publish-results = "python internal/reporting/publish_project_results.py"
 test = "pytest -q"
 forbidden-check = "python tests/check_forbidden.py"
 test-apear = "Rscript -e 'stopifnot(as.character(packageVersion(\"aPEAR\")) == \"1.0.0\")'"
+runtime-check = "Rscript tests/check_runtime.R"
+resources-sync = "python internal/cli/pipeline.py resources-sync"
 
 [feature.motif.dependencies]
 python = "3.10.*"

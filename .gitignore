@@ -1,4 +1,5 @@
-.pixi/
+.pixi/*
+!.pixi/config.toml
 .pytest_cache/
 **/__pycache__/
 *.py[cod]

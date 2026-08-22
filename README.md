@@ -2,6 +2,8 @@
 
 面向 Linux x86-64 的“一仓库、多项目”Bulk RNA-seq 平台。WSL2 适合下游分析；可选 FASTQ→STAR→counts 上游默认只允许在 Linux 服务器上显式运行。项目根目录由代码位置自动解析，不绑定用户名或个人绝对路径。
 
+GitHub 保存的是可迁移的分析平台源码：七个科学模块、控制层、空白项目模板、固定 Pixi 环境和资源同步声明。真实 counts、项目结果、运行缓存及受许可约束的冻结资源不属于源码仓库，也不需要随模板迁移。
+
 ## 使用者只需关注
 
 ```text
@@ -9,6 +11,7 @@ bulk-rnaseq-v4/
 ├── README.md                 # 本入口
 ├── AGENTS.md                 # Agent 的硬约束、决策清单和完整目录树
 ├── pixi.toml / pixi.lock     # 唯一软件环境
+├── .pixi/config.toml         # 允许锁定 Bioconda 数据包完成校验式 post-link 安装
 ├── workflow/                 # Snakemake + 7 个可审查科学模块
 ├── projects/
 │   ├── _template/            # 唯一空白模板
@@ -27,6 +30,30 @@ bulk-rnaseq-v4/
 pixi install --locked --all
 pixi run init-project -- --project-id MY_PROJECT
 ```
+
+## 在 Linux 服务器重建平台
+
+```bash
+git clone --recurse-submodules https://github.com/Az-Fan/bulk-rnaseq-template.git
+cd bulk-rnaseq-template
+pixi install --locked --all
+pixi run runtime-check
+pixi run forbidden-check
+pixi run test
+pixi run doctor
+```
+
+仓库跟踪的 `.pixi/config.toml` 允许锁文件中的 Bioconda annotation data 包执行 post-link。该步骤会在首次环境安装时联网下载固定版本的 `org.Hs.eg.db`、`GO.db` 和 `reactome.db`，并使用 Bioconda 随包元数据中的 MD5 校验；正式分析仍不得联网。`runtime-check` 会验证这些包和本地 Pixi 构建的 aPEAR 是否真实存在且版本正确，防止出现“Pixi 显示安装成功但数据库包实际缺失”。
+
+只有启用依赖外部数据库的模块时才同步对应资源。例如 promoter motif：
+
+```bash
+pixi run resources-sync -- \
+  --manifest resources/sources/hg38_motif.yml \
+  --destination resources/data/shared/hg38-motif
+```
+
+资源文件与软件环境严格分开；同步声明固定 release、URL 和 SHA256。项目特有或受许可限制的资源由用户导入并登记，不进入 GitHub。
 
 新项目故意不可直接运行。Agent 必须先确认 counts 来源、物种/annotation、样本设计、contrast、QC、模块，以及会影响结果或展示的参数。
 
@@ -95,6 +122,7 @@ FASTQ、STAR index、冻结数据库、项目输入、缓存和结果默认均�
 
 ```bash
 pixi run doctor
+pixi run runtime-check
 pixi run forbidden-check
 pixi run test
 ```

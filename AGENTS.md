@@ -5,7 +5,7 @@
 ## 1. 不可违反的规则
 
 1. 不修改、移动、覆盖或删除原始数据、历史项目、v3、已发布结果及用户提供的旧结果。
-2. 不引入 renv、BiocManager、`install.packages()`、`remotes::install_*`、系统 R 或第二套包管理流程。用户只执行 `pixi install --locked --all`。
+2. 不引入 renv、BiocManager、`install.packages()`、`remotes::install_*`、系统 R 或第二套包管理流程。用户只执行 `pixi install --locked --all`。不得删除或忽略仓库跟踪的 `.pixi/config.toml`；它是 Bioconda annotation data 包可重建所必需的安装策略。
 3. 正式分析不联网、不安装依赖、不更新数据库。`resources-sync` 是唯一资源联网阶段，且必须单独获批。
 4. 不猜测 counts 来源、物种、assembly、设计、参考水平、contrast、模块或分析参数；未确认即停止。
 5. 每次正式运行都必须重新展示完整分析计划并取得本次确认。项目中过去的 `confirmed: true` 不能代替当前对话中的确认。
@@ -29,6 +29,7 @@ bulk-rnaseq-v4/
 ├── README.md                         # 生信使用者唯一入口
 ├── AGENTS.md                         # Agent 执行合同
 ├── pixi.toml / pixi.lock             # 唯一软件环境和锁文件
+├── .pixi/config.toml                  # 锁定环境的 post-link 策略；其余 .pixi 内容不提交
 ├── workflow/                         # 可审查的科学方法层
 │   ├── Snakefile                     # 正式 DAG：依赖、资源和断点续跑
 │   ├── functions.R                   # 共享验证、I/O、图形与导出函数
@@ -154,7 +155,7 @@ pixi run analyze -- --project projects/<project_id> \
 4. 用户查看全部 QC/PCA 后，审批排除并更新 `samples.tsv` 与 `qc_approval.yml`；随后必须重新生成 formal plan token。
 5. 正式结果先进入 `work/staging/<run_id>/`。
 6. 启用模块失败必须为 `failed_explicit`；无显著结果也保留完整表和明确状态，不能制造空图。
-7. 发布前验证配置/资源/输入哈希、禁令、单元与集成测试、PDF 签名和实际渲染、HTML 链接、模块状态及 manifest。
+7. 发布前验证 `runtime-check`、配置/资源/输入哈希、禁令、单元与集成测试、PDF 签名和实际渲染、HTML 链接、模块状态及 manifest。
 8. 已发布结果移入 history 后才可发布新结果；不得覆盖或删除历史。
 
 ## 9. 图件与报告
