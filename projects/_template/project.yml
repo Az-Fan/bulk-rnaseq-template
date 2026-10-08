@@ -102,6 +102,9 @@ resources:
   motif_database: REQUIRES_RESOURCE_SELECTION
 
 enrichment:
+  # Compact single-page overview, pathway-gene map, and GSEA core-gene combo.
+  # legacy/both remain available; legacy parity always retains legacy figures.
+  visualization: compact
   ora_databases: [GO_BP, GO_CC, GO_MF, KEGG, Reactome, Hallmark]
   gsea_databases: [Reactome, Hallmark, KEGG, GO_BP]
   ora_profiles: [Primary]
@@ -111,8 +114,8 @@ enrichment:
   random_seed: 123
   min_size: 15
   max_size: 500
-  overview_terms: 20
-  ora_overview_terms: 12
+  overview_terms: 18
+  ora_overview_terms: 8
   gsea_curves: 6
 
 regulation:

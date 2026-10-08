@@ -9,6 +9,8 @@ run_enrichment <- function(context) {
   if (!identical(decision$status, "enabled")) {
     return(record_module_status(context, "03_Enrichment", decision$status, decision$reason %||% ""))
   }
+  source(file.path(context$root, "workflow", "enrichment_visualization.R"), local = environment())
+  plot_modes <- enrichment_plot_modes(context$config)
   if (is.null(context$state$differential)) stop("Differential expression must complete before enrichment")
   if (!identical(context$config$species, "human")) {
     stop("Legacy-compatible enrichment currently requires an explicitly frozen species resource")
@@ -130,7 +132,7 @@ run_enrichment <- function(context) {
         table <- normalize_ora(as.data.frame(object), database)
         database_results[[database]] <- table
         write_result_table(table, file.path(ora_root, "Tables", paste0("Enrichment_Full_", database, "_", profile_name, ".tsv")))
-        if (database %in% c("GO_BP", "KEGG")) {
+        if (plot_modes$legacy && database %in% c("GO_BP", "KEGG")) {
           advanced_objects[[database]] <- clusterProfiler::enricher(
             cluster$All, TERM2GENE = ora_databases[[database]], universe = universe,
             pvalueCutoff = 1, qvalueCutoff = 1, minGSSize = min_size,
@@ -143,7 +145,13 @@ run_enrichment <- function(context) {
       rownames(ora) <- NULL
       profile_results[[profile_name]] <- ora
       write_result_table(ora, file.path(ora_root, "Tables", paste0("ORA_", profile_name, "_Full.tsv")))
-      if (nrow(ora)) {
+      if (plot_modes$compact) {
+        for (database in names(database_results)) {
+          write_compact_enrichment(context, contrast_id, de, database_results[[database]],
+                                   database, "ORA", profile_name)
+        }
+      }
+      if (nrow(ora) && plot_modes$legacy) {
         plot <- plot_ora_publication(ora, paste0(contrast_id, " — ", profile_name, " ORA"),
                                      top_n = as.integer(enrichment_config$ora_overview_terms %||% 12L),
                                      fdr_cutoff = ora_fdr)
@@ -314,7 +322,11 @@ run_enrichment <- function(context) {
       database_gsea[[database]] <- table
       pathway_lists[[database]] <- split(gsea_databases[[database]]$gene, gsea_databases[[database]]$term)
       write_result_table(table, file.path(gsea_root, "Tables", paste0("GSEA_Full_Table_", database, ".tsv")))
-      if (nrow(table)) {
+      if (plot_modes$compact) {
+        write_compact_enrichment(context, contrast_id, de, table, database, "GSEA",
+                                 ranks = ranks, pathways = pathway_lists[[database]])
+      }
+      if (nrow(table) && plot_modes$legacy) {
         overview <- plot_gsea_overview(table, paste0(contrast_id, " — ", database, " GSEA"),
                                        top_n = as.integer(enrichment_config$overview_terms %||% 20L),
                                        fdr_cutoff = gsea_reporting_fdr)

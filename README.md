@@ -99,6 +99,22 @@ pixi run analyze -- --project projects/MY_PROJECT \
 
 当前尚未通过通用验证的 peak-aware motif、WGCNA、personalized executor 和新项目 Pathview 会被硬门禁阻止，不能静默标记完成。人类以外物种若启用尚无冻结物种资源的模块，也会明确失败。
 
+## 富集结果展示
+
+默认 `enrichment.visualization: compact`，每个数据库提供单页气泡总览和通路—基因图。GSEA 还将富集曲线、核心基因的样本表达和基因效应/FDR 合成一张图；ORA 使用 Up/Down 独立 foreground，不混为一组。长通路名换行，完整原名保留在表中。
+
+```yaml
+enrichment:
+  visualization: compact  # compact / legacy / both
+  overview_terms: 18      # GSEA 每库最多 18 个，优先保留两个 NES 方向
+  ora_overview_terms: 8   # ORA 每方向最多 8 个
+  gsea_curves: 6          # GSEA 每库最多 6 张核心基因组合图
+```
+
+组合图使用 `blind=FALSE` VST，只展示该 contrast 的两组样本；逐基因 z-score 使用样本标准差，不聚类、不填补缺失值，常数行显示灰色。效应量来自 ASHR 收缩 log2FC，基因 FDR 来自原始 DESeq2 检验，通路 FDR 与基因 FDR 分开标注。每张图最多展示 30 个核心基因；通路—基因图最多 6 条通路、40 个基因，并为每条通路预留至多 5 个基因。所展示通路的全量核心基因、成员关系、ID 映射候选、绘图矩阵和最终顺序都保存在 `Tables/Display/`；显示颜色在 ±2 截断，数值表不截断。
+
+`legacy` 保留原有 dotplot、lollipop、Sankey、cnet、emap、heatplot 和 aPEAR 等图形能力；`both` 同时输出两版。历史迁移项目启用 `migration.requires_legacy_parity` 时，无论展示模式如何都会保留旧图并执行原有回归门禁。展示模式不改变 ORA/GSEA 统计方法、完整结果表、背景、排序或数据库版本。模板更新不会覆盖现有项目的正式结果；下一次运行需重新确认计划。
+
 ## 可选服务器上游
 
 `internal/upstream/omics-pipelines` 固定为 `xuzhougeng/omics-pipelines` 的指定提交。适配器只调用 FASTQ QC、fastp、STAR 和 raw gene-count merge，不调用其下游 DESeq2 或 enrichment，不在 WSL 建立或下载 STAR index。
